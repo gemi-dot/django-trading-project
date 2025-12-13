@@ -1,0 +1,114 @@
+{% extends 'trading/base.html' %}
+
+{% block title %}Watchlist - Trading Platform{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-eye me-2"></i>My Watchlist</h1>
+            <a href="{% url 'stock_list' %}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Add Stocks
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5><i class="fas fa-list me-2"></i>Watched Stocks</h5>
+    </div>
+    <div class="card-body">
+        {% if watchlist_items %}
+        <div class="row">
+            {% for item in watchlist_items %}
+            <div class="col-lg-4 col-md-6 mb-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <h5 class="card-title mb-1">{{ item.stock.symbol }}</h5>
+                                <small class="text-muted">{{ item.stock.exchange }}</small>
+                            </div>
+                            <div class="text-end">
+                                {% if item.stock.current_price %}
+                                <div class="h5 mb-1">${{ item.stock.current_price }}</div>
+                                {% if item.stock.price_change_percent %}
+                                <small class="badge bg-{% if item.stock.price_change_percent >= 0 %}success{% else %}danger{% endif %}">
+                                    {{ item.stock.price_change_percent|floatformat:2 }}%
+                                </small>
+                                {% endif %}
+                                {% else %}
+                                <div class="text-muted">Price N/A</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <h6 class="card-subtitle mb-3 text-muted">{{ item.stock.name|truncatechars:40 }}</h6>
+                        
+                        {% if item.target_price %}
+                        <div class="mb-3">
+                            <small class="text-muted">Target Price:</small>
+                            <div class="fw-bold text-primary">${{ item.target_price }}</div>
+                            {% if item.stock.current_price %}
+                                {% if item.target_price > item.stock.current_price %}
+                                <small class="text-success">
+                                    <i class="fas fa-arrow-up"></i> Above current price
+                                </small>
+                                {% elif item.target_price < item.stock.current_price %}
+                                <small class="text-danger">
+                                    <i class="fas fa-arrow-down"></i> Below current price
+                                </small>
+                                {% else %}
+                                <small class="text-warning">
+                                    <i class="fas fa-equals"></i> At target price
+                                </small>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        
+                        {% if item.notes %}
+                        <div class="mb-3">
+                            <small class="text-muted">Notes:</small>
+                            <div class="small">{{ item.notes|truncatechars:100 }}</div>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="mt-auto">
+                            <div class="d-flex gap-2">
+                                <a href="{% url 'stock_detail' item.stock.symbol %}" class="btn btn-outline-primary btn-sm flex-fill">
+                                    <i class="fas fa-eye"></i> View
+                                </a>
+                                <a href="{% url 'trade_stock' item.stock.symbol %}" class="btn btn-success btn-sm flex-fill">
+                                    <i class="fas fa-shopping-cart"></i> Trade
+                                </a>
+                                <form method="POST" action="{% url 'toggle_watchlist' item.stock.symbol %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-outline-danger btn-sm" title="Remove from watchlist">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-transparent">
+                        <small class="text-muted">Added on {{ item.created_at|date:"M d, Y g:i A" }}</small>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-eye fa-4x text-muted mb-4"></i>
+            <h4>Your Watchlist is Empty</h4>
+            <p class="text-muted mb-4">Start tracking stocks by adding them to your watchlist.</p>
+            <a href="{% url 'stock_list' %}" class="btn btn-primary btn-lg">
+                <i class="fas fa-search me-2"></i>Browse Stocks
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

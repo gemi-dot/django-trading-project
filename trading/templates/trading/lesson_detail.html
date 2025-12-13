@@ -1,0 +1,128 @@
+{% extends 'trading/base.html' %}
+
+{% block title %}{{ lesson.title }} - Trading Academy{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">{{ lesson.title }}</h4>
+                    <span class="badge badge-{{ lesson.difficulty|lower }}">{{ lesson.difficulty|title }}</span>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <strong>Description:</strong> {{ lesson.description }}
+                    </div>
+                    
+                    <div class="lesson-content">
+                        {{ lesson.content|safe }}
+                    </div>
+                    
+                    {% if lesson.key_concepts %}
+                    <div class="mt-4">
+                        <h5>Key Concepts:</h5>
+                        <div class="alert alert-info">
+                            {{ lesson.key_concepts|safe }}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if lesson.practical_example %}
+                    <div class="mt-4">
+                        <h5>Practical Example:</h5>
+                        <div class="alert alert-success">
+                            {{ lesson.practical_example|safe }}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer">
+                    <div class="row">
+                        <div class="col-md-6">
+                            {% if prev_lesson %}
+                            <a href="{% url 'lesson_detail' prev_lesson.id %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left"></i> Previous: {{ prev_lesson.title|truncatechars:30 }}
+                            </a>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 text-right">
+                            {% if next_lesson %}
+                            <a href="{% url 'lesson_detail' next_lesson.id %}" class="btn btn-outline-primary">
+                                Next: {{ next_lesson.title|truncatechars:30 }} <i class="fas fa-arrow-right"></i>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <!-- Progress Sidebar -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0">Your Progress</h5>
+                </div>
+                <div class="card-body">
+                    {% if progress.completed %}
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle"></i> Completed on {{ progress.completed_at|date:"M d, Y" }}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-clock"></i> Started on {{ progress.started_at|date:"M d, Y" }}
+                        </div>
+                        <form method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="complete">
+                            <button type="submit" class="btn btn-success btn-block">
+                                <i class="fas fa-check"></i> Mark as Completed
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Navigation -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Navigation</h5>
+                </div>
+                <div class="card-body">
+                    <a href="{% url 'learning_dashboard' %}" class="btn btn-outline-primary btn-block">
+                        <i class="fas fa-arrow-left"></i> Back to Learning Dashboard
+                    </a>
+                    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-block">
+                        <i class="fas fa-home"></i> Main Dashboard
+                    </a>
+                    <a href="{% url 'trading_performance' %}" class="btn btn-outline-info btn-block">
+                        <i class="fas fa-chart-line"></i> Trading Performance
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.lesson-content {
+    line-height: 1.6;
+    font-size: 16px;
+}
+
+.lesson-content h1, .lesson-content h2, .lesson-content h3 {
+    margin-top: 20px;
+    margin-bottom: 10px;
+}
+
+.lesson-content ul, .lesson-content ol {
+    margin-left: 20px;
+}
+
+.badge-beginner { background-color: #28a745; }
+.badge-intermediate { background-color: #ffc107; color: #212529; }
+.badge-advanced { background-color: #dc3545; }
+</style>
+{% endblock %}

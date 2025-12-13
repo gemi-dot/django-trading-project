@@ -1,0 +1,200 @@
+{% extends 'trading/base.html' %}
+
+{% block title %}Market Hours - Trading Platform{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="fas fa-clock me-2"></i>Market Hours</h1>
+                <p class="text-muted">Trading hours and status for major stock exchanges</p>
+            </div>
+            <div class="text-end">
+                <small class="text-muted">Current Time:</small><br>
+                <strong>{{ current_time|date:"M d, Y g:i A T" }}</strong>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    {% for market in market_statuses %}
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100 {% if market.is_open %}border-success{% else %}border-secondary{% endif %}">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-building me-2"></i>{{ market.trading_hours.exchange }} Exchange
+                </h5>
+                <span class="badge bg-{% if market.is_open %}success{% else %}{% if market.today_holiday %}warning{% else %}secondary{% endif %}{% endif %} fs-6">
+                    {% if market.is_open %}
+                        <i class="fas fa-check-circle me-1"></i>OPEN
+                    {% elif market.today_holiday %}
+                        <i class="fas fa-calendar-times me-1"></i>HOLIDAY
+                    {% else %}
+                        <i class="fas fa-times-circle me-1"></i>CLOSED
+                    {% endif %}
+                </span>
+            </div>
+            <div class="card-body">
+                <!-- Current Status -->
+                <div class="alert alert-{% if market.is_open %}success{% else %}{% if market.today_holiday %}warning{% else %}info{% endif %}{% endif %} mb-3">
+                    <strong>Status:</strong> {{ market.status_message }}
+                    {% if market.today_holiday %}
+                    <br><small><strong>{{ market.today_holiday.name }}</strong>
+                        {% if market.today_holiday.is_partial_day %}
+                            - Early close at {{ market.today_holiday.early_close_time|time:"g:i A" }}
+                        {% endif %}
+                    </small>
+                    {% endif %}
+                </div>
+
+                <!-- Exchange Time -->
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <h6 class="text-muted mb-1">Exchange Time</h6>
+                        <div class="h5 text-primary">{{ market.local_time|date:"g:i A" }}</div>
+                        <small class="text-muted">{{ market.local_time|date:"M d, Y" }}</small>
+                    </div>
+                    <div class="col-6">
+                        <h6 class="text-muted mb-1">Timezone</h6>
+                        <div class="h6">{{ market.exchange_timezone }}</div>
+                        {% if market.trading_hours.timezone != "Asia/Manila" %}
+                        <small class="text-muted">
+                            {% load tz %}
+                            {% timezone "Asia/Manila" %}
+                                Manila: {{ market.local_time|date:"g:i A" }}
+                            {% endtimezone %}
+                        </small>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Trading Hours -->
+                <div class="mb-3">
+                    <h6 class="text-muted mb-2"><i class="fas fa-business-time me-1"></i>Regular Trading Hours</h6>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span><strong>Open:</strong> {{ market.trading_hours.market_open|time:"g:i A" }}</span>
+                        <span class="text-muted">-</span>
+                        <span><strong>Close:</strong> {{ market.trading_hours.market_close|time:"g:i A" }}</span>
+                    </div>
+                </div>
+
+                <!-- Extended Hours -->
+                {% if market.trading_hours.premarket_open or market.trading_hours.afterhours_close %}
+                <div class="mb-3">
+                    <h6 class="text-muted mb-2"><i class="fas fa-clock me-1"></i>Extended Hours</h6>
+                    {% if market.trading_hours.premarket_open %}
+                    <div class="small">
+                        <strong>Pre-market:</strong> 
+                        {{ market.trading_hours.premarket_open|time:"g:i A" }} - 
+                        {{ market.trading_hours.market_open|time:"g:i A" }}
+                    </div>
+                    {% endif %}
+                    {% if market.trading_hours.afterhours_close %}
+                    <div class="small">
+                        <strong>After-hours:</strong> 
+                        {{ market.trading_hours.market_close|time:"g:i A" }} - 
+                        {{ market.trading_hours.afterhours_close|time:"g:i A" }}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <!-- Trading Days -->
+                <div class="mb-3">
+                    <h6 class="text-muted mb-2"><i class="fas fa-calendar-week me-1"></i>Trading Days</h6>
+                    <div class="d-flex flex-wrap gap-1">
+                        <span class="badge {% if market.trading_hours.monday_trading %}bg-success{% else %}bg-light text-dark{% endif %}">Mon</span>
+                        <span class="badge {% if market.trading_hours.tuesday_trading %}bg-success{% else %}bg-light text-dark{% endif %}">Tue</span>
+                        <span class="badge {% if market.trading_hours.wednesday_trading %}bg-success{% else %}bg-light text-dark{% endif %}">Wed</span>
+                        <span class="badge {% if market.trading_hours.thursday_trading %}bg-success{% else %}bg-light text-dark{% endif %}">Thu</span>
+                        <span class="badge {% if market.trading_hours.friday_trading %}bg-success{% else %}bg-light text-dark{% endif %}">Fri</span>
+                        <span class="badge {% if market.trading_hours.saturday_trading %}bg-success{% else %}bg-light text-dark{% endif %}">Sat</span>
+                        <span class="badge {% if market.trading_hours.sunday_trading %}bg-success{% else %}bg-light text-dark{% endif %}">Sun</span>
+                    </div>
+                </div>
+
+                <!-- Upcoming Holidays -->
+                {% if market.upcoming_holidays %}
+                <div>
+                    <h6 class="text-muted mb-2"><i class="fas fa-calendar-alt me-1"></i>Upcoming Holidays</h6>
+                    {% for holiday in market.upcoming_holidays %}
+                    <div class="small mb-1">
+                        <strong>{{ holiday.date|date:"M d" }}:</strong> {{ holiday.name }}
+                        {% if holiday.is_partial_day %}
+                            <span class="badge bg-warning text-dark ms-1">Early Close</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Market Hours Information -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card border-info">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Market Hours Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-globe-americas me-1"></i>US Markets (NYSE, NASDAQ)</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Regular Hours:</strong> 9:30 AM - 4:00 PM ET</li>
+                            <li><strong>Pre-Market:</strong> 4:00 AM - 9:30 AM ET</li>
+                            <li><strong>After-Hours:</strong> 4:00 PM - 8:00 PM ET</li>
+                            <li><strong>Trading Days:</strong> Monday - Friday</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-globe-asia me-1"></i>Philippines Stock Exchange (PSE)</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Regular Hours:</strong> 9:30 AM - 3:30 PM PHT</li>
+                            <li><strong>Trading Days:</strong> Monday - Friday</li>
+                            <li><strong>Lunch Break:</strong> 12:00 PM - 1:00 PM (No trading halt)</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-globe-europe me-1"></i>London Stock Exchange (LSE)</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Regular Hours:</strong> 8:00 AM - 4:30 PM GMT</li>
+                            <li><strong>Trading Days:</strong> Monday - Friday</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-globe-asia me-1"></i>Tokyo Stock Exchange (TSE)</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Morning Session:</strong> 9:00 AM - 11:30 AM JST</li>
+                            <li><strong>Afternoon Session:</strong> 12:30 PM - 3:00 PM JST</li>
+                            <li><strong>Trading Days:</strong> Monday - Friday</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="alert alert-light mt-3">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    <strong>Note:</strong> Market hours are subject to change during holidays and special circumstances. 
+                    Times shown are in each exchange's local timezone. Early market closures may occur on certain days before holidays.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="text-center mt-4">
+    <a href="{% url 'stock_list' %}" class="btn btn-primary">
+        <i class="fas fa-chart-line me-2"></i>Browse Stocks
+    </a>
+    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary ms-2">
+        <i class="fas fa-tachometer-alt me-2"></i>Back to Dashboard
+    </a>
+</div>
+{% endblock %}

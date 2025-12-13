@@ -1,0 +1,214 @@
+{% extends 'trading/base.html' %}
+
+{% block title %}Dashboard - Trading Platform{% endblock %}
+
+{% block content %}
+<!-- Market Status Banner -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card border-info">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="fas fa-clock me-2"></i>
+                        <strong>Market Status:</strong>
+                        <span class="ms-2">
+                            {% now "M d, Y g:i A" %} (Manila Time)
+                        </span>
+                    </div>
+                    <div class="d-flex gap-3">
+                        <span class="badge bg-success">NYSE: 9:30 AM - 4:00 PM ET</span>
+                        <span class="badge bg-info">PSE: 9:30 AM - 3:30 PM PHT</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <h1><i class="fas fa-tachometer-alt me-2"></i>Dashboard</h1>
+        <p class="text-muted">Welcome back, {{ user.first_name|default:user.username }}!</p>
+    </div>
+</div>
+
+<!-- Account Overview -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card border-primary">
+            <div class="card-body text-center">
+                <i class="fas fa-wallet fa-2x text-primary mb-2"></i>
+                <h5 class="card-title">Account Balance</h5>
+                <h3 class="text-primary">${{ user_profile.account_balance|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-success">
+            <div class="card-body text-center">
+                <i class="fas fa-chart-pie fa-2x text-success mb-2"></i>
+                <h5 class="card-title">Portfolio Value</h5>
+                <h3 class="text-success">${{ total_portfolio_value|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-info">
+            <div class="card-body text-center">
+                <i class="fas fa-coins fa-2x text-info mb-2"></i>
+                <h5 class="card-title">Total Invested</h5>
+                <h3 class="text-info">${{ total_invested|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-{% if total_gain_loss >= 0 %}success{% else %}danger{% endif %}">
+            <div class="card-body text-center">
+                <i class="fas fa-{% if total_gain_loss >= 0 %}arrow-up{% else %}arrow-down{% endif %} fa-2x text-{% if total_gain_loss >= 0 %}success{% else %}danger{% endif %} mb-2"></i>
+                <h5 class="card-title">Total P&L</h5>
+                <h3 class="text-{% if total_gain_loss >= 0 %}success{% else %}danger{% endif %}">
+                    {{ total_gain_loss|floatformat:2|floatformat:"+2" }}
+                </h3>
+                <small class="text-muted">({{ gain_loss_percent|floatformat:2 }}%)</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Portfolio Holdings -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-briefcase me-2"></i>Portfolio Holdings</h5>
+                <a href="{% url 'portfolio' %}" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body">
+                {% if portfolio_items %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Shares</th>
+                                <th>Current Value</th>
+                                <th>P&L</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in portfolio_items|slice:":5" %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'stock_detail' item.stock.symbol %}" class="text-decoration-none">
+                                        {{ item.stock.symbol }}
+                                    </a>
+                                </td>
+                                <td>{{ item.quantity }}</td>
+                                <td>${{ item.current_value|floatformat:2|default:"N/A" }}</td>
+                                <td class="text-{% if item.gain_loss >= 0 %}success{% else %}danger{% endif %}">
+                                    {% if item.gain_loss %}
+                                        {{ item.gain_loss|floatformat:2|floatformat:"+2" }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No portfolio holdings yet</p>
+                    <a href="{% url 'stock_list' %}" class="btn btn-primary">Browse Stocks</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Trades -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-exchange-alt me-2"></i>Recent Trades</h5>
+                <a href="{% url 'trade_history' %}" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body">
+                {% if recent_trades %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Symbol</th>
+                                <th>Quantity</th>
+                                <th>Price</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for trade in recent_trades %}
+                            <tr>
+                                <td>
+                                    <span class="badge bg-{% if trade.trade_type == 'buy' %}success{% else %}danger{% endif %}">
+                                        {{ trade.trade_type|upper }}
+                                    </span>
+                                </td>
+                                <td>{{ trade.stock.symbol }}</td>
+                                <td>{{ trade.quantity }}</td>
+                                <td>${{ trade.price }}</td>
+                                <td>{{ trade.order_date|date:"M d g:i A" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-exchange-alt fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No trades yet</p>
+                    <a href="{% url 'stock_list' %}" class="btn btn-primary">Start Trading</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Watchlist -->
+{% if watchlist_items %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-eye me-2"></i>Watchlist</h5>
+                <a href="{% url 'watchlist' %}" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for item in watchlist_items %}
+                    <div class="col-md-6 col-lg-3 mb-3">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h6 class="card-title mb-0">{{ item.stock.symbol }}</h6>
+                                    {% if item.stock.current_price %}
+                                    <span class="badge bg-primary">${{ item.stock.current_price }}</span>
+                                    {% endif %}
+                                </div>
+                                <p class="card-text small text-muted">{{ item.stock.name|truncatechars:25 }}</p>
+                                <a href="{% url 'stock_detail' item.stock.symbol %}" class="btn btn-sm btn-outline-primary">View</a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

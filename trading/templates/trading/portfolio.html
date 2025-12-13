@@ -1,0 +1,151 @@
+{% extends 'trading/base.html' %}
+
+{% block title %}Portfolio - Trading Platform{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-briefcase me-2"></i>My Portfolio</h1>
+            <a href="{% url 'stock_list' %}" class="btn btn-success">
+                <i class="fas fa-plus me-2"></i>Add New Position
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Portfolio Summary -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card border-success">
+            <div class="card-body text-center">
+                <i class="fas fa-chart-pie fa-2x text-success mb-2"></i>
+                <h6 class="card-title">Total Value</h6>
+                <h4 class="text-success">${{ total_value|floatformat:2 }}</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-info">
+            <div class="card-body text-center">
+                <i class="fas fa-coins fa-2x text-info mb-2"></i>
+                <h6 class="card-title">Total Invested</h6>
+                <h4 class="text-info">${{ total_invested|floatformat:2 }}</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-{% if total_gain_loss >= 0 %}success{% else %}danger{% endif %}">
+            <div class="card-body text-center">
+                <i class="fas fa-{% if total_gain_loss >= 0 %}arrow-up{% else %}arrow-down{% endif %} fa-2x text-{% if total_gain_loss >= 0 %}success{% else %}danger{% endif %} mb-2"></i>
+                <h6 class="card-title">Total P&L</h6>
+                <h4 class="text-{% if total_gain_loss >= 0 %}success{% else %}danger{% endif %}">
+                    {{ total_gain_loss|floatformat:2|floatformat:"+2" }}
+                </h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-primary">
+            <div class="card-body text-center">
+                <i class="fas fa-percentage fa-2x text-primary mb-2"></i>
+                <h6 class="card-title">Return %</h6>
+                <h4 class="text-primary">{{ gain_loss_percent|floatformat:2 }}%</h4>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Holdings Table -->
+<div class="card">
+    <div class="card-header">
+        <h5><i class="fas fa-list me-2"></i>Current Holdings</h5>
+    </div>
+    <div class="card-body">
+        {% if portfolio_items %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Stock</th>
+                        <th>Company</th>
+                        <th class="text-end">Shares</th>
+                        <th class="text-end">Avg. Price</th>
+                        <th class="text-end">Current Price</th>
+                        <th class="text-end">Market Value</th>
+                        <th class="text-end">Total Return</th>
+                        <th class="text-end">Return %</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in portfolio_items %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'stock_detail' item.stock.symbol %}" class="text-decoration-none fw-bold">
+                                {{ item.stock.symbol }}
+                            </a>
+                        </td>
+                        <td>{{ item.stock.name|truncatechars:30 }}</td>
+                        <td class="text-end">{{ item.quantity }}</td>
+                        <td class="text-end">${{ item.average_price|floatformat:2 }}</td>
+                        <td class="text-end">
+                            {% if item.stock.current_price %}
+                                <strong>${{ item.stock.current_price }}</strong>
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if item.current_value %}
+                                <strong>${{ item.current_value|floatformat:2 }}</strong>
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if item.gain_loss %}
+                                <span class="text-{% if item.gain_loss >= 0 %}success{% else %}danger{% endif %} fw-bold">
+                                    {{ item.gain_loss|floatformat:2|floatformat:"+2" }}
+                                </span>
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if item.gain_loss_percent %}
+                                <span class="badge bg-{% if item.gain_loss_percent >= 0 %}success{% else %}danger{% endif %}">
+                                    {{ item.gain_loss_percent|floatformat:2 }}%
+                                </span>
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'stock_detail' item.stock.symbol %}" class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{% url 'trade_stock' item.stock.symbol %}" class="btn btn-success btn-sm">
+                                    <i class="fas fa-shopping-cart"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-chart-pie fa-4x text-muted mb-4"></i>
+            <h4>No Holdings Yet</h4>
+            <p class="text-muted mb-4">Start building your portfolio by purchasing some stocks.</p>
+            <a href="{% url 'stock_list' %}" class="btn btn-primary btn-lg">
+                <i class="fas fa-search me-2"></i>Browse Stocks
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

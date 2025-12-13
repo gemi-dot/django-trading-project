@@ -1,0 +1,162 @@
+{% extends 'trading/base.html' %}
+
+{% block title %}Stop Loss Orders - Trading Platform{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-shield-alt me-2"></i>Stop Loss Orders</h1>
+            <a href="{% url 'stock_list' %}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Place New Order
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-8">
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>About Stop Loss Orders:</strong> These automatically sell your shares if the stock price drops to your specified stop price, helping protect your investments from significant losses.
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <h5 class="card-title">Active Orders</h5>
+                <h2 class="text-primary">{{ orders|length }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5><i class="fas fa-list me-2"></i>Your Stop Loss Orders</h5>
+    </div>
+    <div class="card-body">
+        {% if orders %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Stock</th>
+                        <th>Company</th>
+                        <th class="text-end">Current Price</th>
+                        <th class="text-end">Stop Price</th>
+                        <th class="text-end">Quantity</th>
+                        <th class="text-end">Trigger Distance</th>
+                        <th>Created</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'stock_detail' order.stock.symbol %}" class="text-decoration-none fw-bold">
+                                {{ order.stock.symbol }}
+                            </a>
+                        </td>
+                        <td>{{ order.stock.name|truncatechars:30 }}</td>
+                        <td class="text-end">
+                            {% if order.stock.current_price %}
+                            <strong>${{ order.stock.current_price }}</strong>
+                            {% else %}
+                            <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <span class="text-danger fw-bold">${{ order.stop_price }}</span>
+                        </td>
+                        <td class="text-end">{{ order.quantity }}</td>
+                        <td class="text-end">
+                            {% if order.trigger_distance %}
+                                {% if order.trigger_distance > 0 %}
+                                <span class="text-success">
+                                    ${{ order.trigger_distance|floatformat:2 }}
+                                    <small class="text-muted">({{ order.trigger_distance_percent|floatformat:1 }}%)</small>
+                                </span>
+                                {% else %}
+                                <span class="badge bg-warning">Near trigger!</span>
+                                {% endif %}
+                            {% else %}
+                            <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ order.created_at|date:"M d, Y g:i A" }}</td>
+                        <td>
+                            <span class="badge bg-success">{{ order.get_status_display }}</span>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'stock_detail' order.stock.symbol %}" class="btn btn-outline-primary btn-sm" title="View Stock">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <form method="POST" action="{% url 'cancel_stop_loss' order.id %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-outline-danger btn-sm" 
+                                            onclick="return confirm('Are you sure you want to cancel this stop loss order for {{ order.stock.symbol }}?')"
+                                            title="Cancel Order">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-shield-alt fa-4x text-muted mb-4"></i>
+            <h4>No Active Stop Loss Orders</h4>
+            <p class="text-muted mb-4">Protect your investments by setting up stop loss orders for your holdings.</p>
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <div class="card border-primary">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">How Stop Loss Orders Work</h6>
+                            <p class="card-text small">
+                                1. Set a "stop price" below the current market price<br>
+                                2. If the stock price drops to that level, it automatically sells<br>
+                                3. This helps limit your losses on investments
+                            </p>
+                            <a href="{% url 'portfolio' %}" class="btn btn-primary">
+                                <i class="fas fa-briefcase me-2"></i>View Portfolio
+                            </a>
+                            <a href="{% url 'stock_list' %}" class="btn btn-outline-primary ms-2">
+                                <i class="fas fa-search me-2"></i>Browse Stocks
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if orders %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Important Notes</h6>
+            </div>
+            <div class="card-body">
+                <ul class="mb-0">
+                    <li>Stop loss orders are monitored continuously during market hours</li>
+                    <li>Orders will execute automatically when the stop price is reached</li>
+                    <li>Market volatility may cause execution at prices different from your stop price</li>
+                    <li>You can cancel stop loss orders anytime before they trigger</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

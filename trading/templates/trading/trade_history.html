@@ -1,0 +1,125 @@
+{% extends 'trading/base.html' %}
+
+{% block title %}Trade History - Trading Platform{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-exchange-alt me-2"></i>Trade History</h1>
+            <a href="{% url 'stock_list' %}" class="btn btn-success">
+                <i class="fas fa-plus me-2"></i>New Trade
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5><i class="fas fa-history me-2"></i>All Trades</h5>
+    </div>
+    <div class="card-body">
+        {% if trades %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Stock</th>
+                        <th>Company</th>
+                        <th class="text-end">Quantity</th>
+                        <th class="text-end">Price</th>
+                        <th class="text-end">Total Amount</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for trade in trades %}
+                    <tr>
+                        <td>
+                            <div>{{ trade.order_date|date:"M d, Y" }}</div>
+                            <small class="text-muted">{{ trade.order_date|date:"g:i A" }}</small>
+                        </td>
+                        <td>
+                            <span class="badge bg-{% if trade.trade_type == 'buy' %}success{% else %}danger{% endif %} text-uppercase">
+                                <i class="fas fa-{% if trade.trade_type == 'buy' %}arrow-up{% else %}arrow-down{% endif %} me-1"></i>
+                                {{ trade.trade_type }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{% url 'stock_detail' trade.stock.symbol %}" class="text-decoration-none fw-bold">
+                                {{ trade.stock.symbol }}
+                            </a>
+                        </td>
+                        <td>{{ trade.stock.name|truncatechars:30 }}</td>
+                        <td class="text-end">{{ trade.quantity }}</td>
+                        <td class="text-end">${{ trade.price|floatformat:2 }}</td>
+                        <td class="text-end">
+                            <strong>${{ trade.total_amount|floatformat:2 }}</strong>
+                        </td>
+                        <td>
+                            <span class="badge bg-{% if trade.status == 'executed' %}success{% elif trade.status == 'pending' %}warning{% elif trade.status == 'cancelled' %}danger{% else %}secondary{% endif %}">
+                                {{ trade.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{% url 'stock_detail' trade.stock.symbol %}" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-eye"></i> View Stock
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <nav aria-label="Trade history pagination" class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
+                            &laquo; Previous
+                        </a>
+                    </li>
+                {% endif %}
+                
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+                            Next &raquo;
+                        </a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-exchange-alt fa-4x text-muted mb-4"></i>
+            <h4>No Trades Yet</h4>
+            <p class="text-muted mb-4">Your trading history will appear here once you start trading.</p>
+            <a href="{% url 'stock_list' %}" class="btn btn-primary btn-lg">
+                <i class="fas fa-search me-2"></i>Browse Stocks to Trade
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

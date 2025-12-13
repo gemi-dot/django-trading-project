@@ -1,0 +1,310 @@
+{% extends 'trading/base.html' %}
+
+{% block title %}Trade {{ stock.symbol }} - Trading Platform{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="fas fa-exchange-alt me-2"></i>Trade {{ stock.symbol }}</h4>
+            </div>
+            <div class="card-body">
+                <!-- Stock Info -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h5>{{ stock.name }}</h5>
+                        <div class="d-flex gap-2 mb-2">
+                            <span class="badge bg-secondary">{{ stock.exchange }}</span>
+                            {% if stock.sector %}
+                            <span class="badge bg-info">{{ stock.sector }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-md-end">
+                        {% if stock.current_price %}
+                        <h3 class="text-primary">${{ stock.current_price }}</h3>
+                        {% if stock.price_change_percent %}
+                        <small class="text-{% if stock.price_change_percent >= 0 %}success{% else %}danger{% endif %}">
+                            {{ stock.price_change_percent|floatformat:2 }}% today
+                        </small>
+                        {% endif %}
+                        {% else %}
+                        <h4 class="text-muted">Price N/A</h4>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Account Info -->
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">Account Balance</h6>
+                                <h4 class="text-primary">${{ user_profile.account_balance|floatformat:2 }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">Current Holdings</h6>
+                                <h4 class="text-info">{{ current_quantity }} shares</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title">Avg. Purchase Price</h6>
+                                <h4 class="text-secondary">
+                                    {% if portfolio_item %}
+                                        ${{ portfolio_item.average_price }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trading Form -->
+                <form method="POST" id="tradeForm">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="trade_type" class="form-label">Order Type</label>
+                            <select name="trade_type" id="trade_type" class="form-select" required>
+                                <option value="">Select order type</option>
+                                <option value="buy">Buy</option>
+                                {% if current_quantity > 0 %}
+                                <option value="sell">Sell</option>
+                                {% endif %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="order_type" class="form-label">Execution Type</label>
+                            <select name="order_type" id="order_type" class="form-select">
+                                <option value="market">Market Order</option>
+                                <option value="limit">Limit Order</option>
+                                <option value="stop_loss">Stop Loss</option>
+                                <option value="stop_limit">Stop Limit</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="quantity" class="form-label">Quantity</label>
+                            <input type="number" name="quantity" id="quantity" class="form-control" min="1" 
+                                   {% if current_quantity > 0 %}max="{{ current_quantity }}"{% endif %} required>
+                            {% if current_quantity > 0 %}
+                            <div class="form-text">Maximum: {{ current_quantity }} shares</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="price" class="form-label">Price per Share</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" name="price" id="price" class="form-control" 
+                                       step="0.01" min="0.01" value="{{ stock.current_price|default:'0' }}" required>
+                            </div>
+                            <div class="form-text">Current market price: ${{ stock.current_price|default:'N/A' }}</div>
+                        </div>
+                    </div>
+
+                    <!-- Stop Loss Section -->
+                    <div class="row" id="stopLossSection" style="display: none;">
+                        <div class="col-12">
+                            <div class="card bg-light mb-3">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="fas fa-shield-alt me-2"></i>Stop Loss Protection</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label for="stop_loss_price" class="form-label">Stop Loss Price</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">$</span>
+                                                <input type="number" name="stop_loss_price" id="stop_loss_price" 
+                                                       class="form-control" step="0.01" min="0.01" 
+                                                       placeholder="Optional stop loss price">
+                                            </div>
+                                            <div class="form-text">Sell automatically if price drops to this level</div>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <div class="mt-4">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="enableStopLoss">
+                                                    <label class="form-check-label" for="enableStopLoss">
+                                                        Enable stop loss protection
+                                                    </label>
+                                                </div>
+                                                <small class="text-muted">Protect your investment from significant losses</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Total Amount</label>
+                            <div class="form-control-plaintext">
+                                <h5 id="totalAmount" class="text-primary">$0.00</h5>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Order Preview -->
+                    <div class="card bg-light mb-4" id="orderPreview" style="display: none;">
+                        <div class="card-body">
+                            <h6 class="card-title">Order Preview</h6>
+                            <div class="row">
+                                <div class="col-6">
+                                    <strong id="previewType">-</strong> <span id="previewQuantity">-</span> shares of {{ stock.symbol }}
+                                </div>
+                                <div class="col-6 text-end">
+                                    At $<span id="previewPrice">-</span> per share
+                                </div>
+                            </div>
+                            <div id="previewStopLoss" style="display: none;">
+                                <div class="row mt-2">
+                                    <div class="col-12">
+                                        <small class="text-warning">
+                                            <i class="fas fa-shield-alt"></i> Stop loss at $<span id="previewStopLossPrice">-</span>
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            <hr>
+                            <div class="row">
+                                <div class="col-6">
+                                    <strong>Total Amount:</strong>
+                                </div>
+                                <div class="col-6 text-end">
+                                    <strong class="text-primary">$<span id="previewTotal">-</span></strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'stock_detail' stock.symbol %}" class="btn btn-outline-secondary me-md-2">Cancel</a>
+                        <button type="submit" class="btn btn-success" id="submitBtn" disabled>
+                            <i class="fas fa-check me-2"></i>Place Order
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Active Stop Loss Orders -->
+                {% if stop_loss_orders %}
+                <div class="mt-5">
+                    <h5><i class="fas fa-shield-alt me-2"></i>Active Stop Loss Orders</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Quantity</th>
+                                    <th>Stop Price</th>
+                                    <th>Created</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for order in stop_loss_orders %}
+                                <tr>
+                                    <td>{{ order.quantity }} shares</td>
+                                    <td>${{ order.stop_price }}</td>
+                                    <td>{{ order.created_at|date:"M d g:i A" }}</td>
+                                    <td>
+                                        <form method="POST" action="{% url 'cancel_stop_loss' order.id %}" class="d-inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                                    onclick="return confirm('Cancel this stop loss order?')">
+                                                Cancel
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tradeType = document.getElementById('trade_type');
+    const quantity = document.getElementById('quantity');
+    const price = document.getElementById('price');
+    const totalAmount = document.getElementById('totalAmount');
+    const orderPreview = document.getElementById('orderPreview');
+    const submitBtn = document.getElementById('submitBtn');
+    const orderType = document.getElementById('order_type');
+    const stopLossSection = document.getElementById('stopLossSection');
+    const enableStopLoss = document.getElementById('enableStopLoss');
+    const stopLossPrice = document.getElementById('stop_loss_price');
+    const previewStopLoss = document.getElementById('previewStopLoss');
+    const previewStopLossPrice = document.getElementById('previewStopLossPrice');
+    
+    function updateOrderPreview() {
+        const type = tradeType.value;
+        const qty = parseFloat(quantity.value) || 0;
+        const prc = parseFloat(price.value) || 0;
+        const total = qty * prc;
+        
+        totalAmount.textContent = `$${total.toFixed(2)}`;
+        
+        if (type && qty > 0 && prc > 0) {
+            document.getElementById('previewType').textContent = type.toUpperCase();
+            document.getElementById('previewQuantity').textContent = qty;
+            document.getElementById('previewPrice').textContent = prc.toFixed(2);
+            document.getElementById('previewTotal').textContent = total.toFixed(2);
+            orderPreview.style.display = 'block';
+            submitBtn.disabled = false;
+            
+            if (enableStopLoss.checked && stopLossPrice.value) {
+                previewStopLoss.style.display = 'block';
+                previewStopLossPrice.textContent = parseFloat(stopLossPrice.value).toFixed(2);
+            } else {
+                previewStopLoss.style.display = 'none';
+            }
+        } else {
+            orderPreview.style.display = 'none';
+            submitBtn.disabled = true;
+        }
+    }
+    
+    tradeType.addEventListener('change', updateOrderPreview);
+    quantity.addEventListener('input', updateOrderPreview);
+    price.addEventListener('input', updateOrderPreview);
+    orderType.addEventListener('change', function() {
+        if (this.value === 'stop_loss' || this.value === 'stop_limit') {
+            stopLossSection.style.display = 'block';
+        } else {
+            stopLossSection.style.display = 'none';
+        }
+    });
+    enableStopLoss.addEventListener('change', updateOrderPreview);
+    stopLossPrice.addEventListener('input', updateOrderPreview);
+    
+    // Update max quantity when sell is selected
+    tradeType.addEventListener('change', function() {
+        if (this.value === 'sell') {
+            quantity.max = {{ current_quantity }};
+        } else {
+            quantity.removeAttribute('max');
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,167 @@
+{% extends 'trading/base.html' %}
+
+{% block title %}Browse Stocks - Trading Platform{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-chart-line me-2"></i>Browse Stocks</h1>
+            <div class="d-flex gap-2">
+                <form method="GET" class="d-flex">
+                    <input type="search" name="q" value="{{ query }}" class="form-control me-2" placeholder="Search stocks..." style="width: 300px;">
+                    <button class="btn btn-outline-primary" type="submit">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <form method="GET" class="d-flex gap-2">
+                    <input type="hidden" name="q" value="{{ query }}">
+                    <select name="exchange" class="form-select" onchange="this.form.submit()">
+                        <option value="">All Exchanges</option>
+                        {% for exchange in exchanges %}
+                        <option value="{{ exchange }}" {% if exchange == selected_exchange %}selected{% endif %}>
+                            {{ exchange }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <select name="sector" class="form-select" onchange="this.form.submit()">
+                        <option value="">All Sectors</option>
+                        {% for sector in sectors %}
+                        <option value="{{ sector }}" {% if sector == selected_sector %}selected{% endif %}>
+                            {{ sector }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </div>
+            <div class="col-md-6 text-end">
+                <small class="text-muted">{{ page_obj.paginator.count }} stocks found</small>
+            </div>
+        </div>
+
+        <!-- Stocks Table -->
+        <div class="card">
+            <div class="card-body">
+                {% if stocks %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Company Name</th>
+                                <th>Exchange</th>
+                                <th>Sector</th>
+                                <th class="text-end">Current Price</th>
+                                <th class="text-end">Change</th>
+                                <th class="text-end">Volume</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stock in stocks %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'stock_detail' stock.symbol %}" class="text-decoration-none fw-bold">
+                                        {{ stock.symbol }}
+                                    </a>
+                                </td>
+                                <td>{{ stock.name|truncatechars:40 }}</td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ stock.exchange }}</span>
+                                </td>
+                                <td>{{ stock.sector|default:"N/A" }}</td>
+                                <td class="text-end">
+                                    {% if stock.current_price %}
+                                        <strong>${{ stock.current_price }}</strong>
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if stock.price_change_percent %}
+                                        <span class="badge bg-{% if stock.price_change_percent >= 0 %}success{% else %}danger{% endif %}">
+                                            {{ stock.price_change_percent|floatformat:2 }}%
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if stock.volume %}
+                                        {{ stock.volume|floatformat:0 }}
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{% url 'stock_detail' stock.symbol %}" class="btn btn-outline-primary btn-sm">
+                                            <i class="fas fa-eye"></i> View
+                                        </a>
+                                        {% if user.is_authenticated %}
+                                        <a href="{% url 'trade_stock' stock.symbol %}" class="btn btn-success btn-sm">
+                                            <i class="fas fa-shopping-cart"></i> Trade
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                {% if page_obj.has_other_pages %}
+                <nav aria-label="Stocks pagination" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if query %}q={{ query }}&{% endif %}{% if selected_exchange %}exchange={{ selected_exchange }}&{% endif %}{% if selected_sector %}sector={{ selected_sector }}&{% endif %}page={{ page_obj.previous_page_number }}">
+                                    &laquo; Previous
+                                </a>
+                            </li>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?{% if query %}q={{ query }}&{% endif %}{% if selected_exchange %}exchange={{ selected_exchange }}&{% endif %}{% if selected_sector %}sector={{ selected_sector }}&{% endif %}page={{ num }}">
+                                        {{ num }}
+                                    </a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if query %}q={{ query }}&{% endif %}{% if selected_exchange %}exchange={{ selected_exchange }}&{% endif %}{% if selected_sector %}sector={{ selected_sector }}&{% endif %}page={{ page_obj.next_page_number }}">
+                                    Next &raquo;
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                    <h4>No stocks found</h4>
+                    <p class="text-muted">Try adjusting your search criteria or filters.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
