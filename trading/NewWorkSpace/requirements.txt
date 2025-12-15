@@ -1,0 +1,13 @@
+django==5.0.0
+djangorestframework==3.14.0
+pandas
+numpy
+yfinance==0.2.18
+ta==0.10.2
+plotly==5.17.0
+python-dotenv==1.0.0
+celery==5.3.0
+redis==5.0.0
+requests==2.31.0
+matplotlib
+scikit-learn

@@ -1,5 +1,36 @@
 # Django Trading Project
 
+## ⚠️ **IMPORTANT DISCLAIMER - EDUCATIONAL USE ONLY**
+
+**THIS PROJECT IS FOR EDUCATIONAL AND DEMONSTRATION PURPOSES ONLY**
+
+This trading simulation platform is created solely for educational purposes to help users learn about trading concepts, technical analysis, and market dynamics in a risk-free environment. 
+
+### 🚫 **NOT FOR REAL TRADING**
+- This application **DOES NOT** provide real financial advice
+- This application **DOES NOT** execute real trades
+- This application **DOES NOT** connect to real brokerage accounts
+- All data, prices, and trading activities are **SIMULATED**
+
+### 📚 **Educational Intent**
+- Designed to teach trading fundamentals and concepts
+- Provides a safe environment to practice trading strategies
+- Helps users understand market mechanics without financial risk
+- Intended for learning purposes only
+
+### ⚖️ **Legal Notice**
+- **No Financial Advice**: Nothing in this application constitutes financial, investment, trading, or other types of advice
+- **No Warranties**: The creator makes no warranties about the accuracy, reliability, or completeness of any information
+- **Use at Your Own Risk**: Users are solely responsible for their own investment decisions
+- **Educational Tool**: This is purely an educational tool and should not be used as a basis for real trading decisions
+
+### 🛡️ **Limitation of Liability**
+The creator of this project shall not be liable for any direct, indirect, incidental, special, consequential, or punitive damages arising from the use of this educational tool.
+
+**By using this application, you acknowledge that you understand this is for educational purposes only and that you should consult with qualified financial professionals before making any real investment decisions.**
+
+---
+
 A comprehensive web-based trading simulation platform built with Django. This project provides users with a virtual trading environment to learn and practice stock trading without financial risk.
 
 ## Features

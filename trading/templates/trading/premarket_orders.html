@@ -1,0 +1,302 @@
+{% extends 'trading/base.html' %}
+{% load static %}
+
+{% block title %}Pre-Market Orders{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-clock text-warning"></i> Pre-Market Orders</h2>
+                <a href="{% url 'premarket_watchlist' %}" class="btn btn-outline-primary">
+                    <i class="fas fa-list"></i> Pre-Market Watchlist
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Orders -->
+    {% if pending_orders %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-hourglass-half"></i> Pending Orders ({{ pending_orders.count }})
+                        <small class="ms-2">Will activate at market open</small>
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Stock</th>
+                                    <th>Order Type</th>
+                                    <th>Quantity</th>
+                                    <th>Stop Price</th>
+                                    <th>Trigger</th>
+                                    <th>Created</th>
+                                    <th>Strategy</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for order in pending_orders %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ order.stock.symbol }}</strong><br>
+                                        <small class="text-muted">{{ order.stock.name|truncatechars:30 }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ order.get_order_type_display }}</span>
+                                        {% if order.order_type == 'trailing_stop' %}
+                                            <br><small>
+                                                {% if order.trail_percent %}{{ order.trail_percent }}%{% endif %}
+                                                {% if order.trail_amount %} ${{ order.trail_amount }}{% endif %}
+                                            </small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ order.quantity }}</td>
+                                    <td>
+                                        ${{ order.stop_price|floatformat:2 }}
+                                        {% if order.limit_price %}
+                                            <br><small class="text-muted">Limit: ${{ order.limit_price|floatformat:2 }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ order.get_trigger_condition_display }}</td>
+                                    <td>
+                                        {{ order.created_at|date:"M d, Y" }}<br>
+                                        <small class="text-muted">{{ order.created_at|time:"H:i" }}</small>
+                                    </td>
+                                    <td>
+                                        {% if order.strategy_name %}
+                                            <small class="text-primary">{{ order.strategy_name|truncatechars:20 }}</small>
+                                        {% else %}
+                                            <small class="text-muted">No strategy</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <form method="post" action="{% url 'cancel_premarket_order' order.id %}" class="d-inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                                    onclick="return confirm('Cancel this pre-market order?')">
+                                                <i class="fas fa-times"></i> Cancel
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Active Orders -->
+    {% if active_orders %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-check-circle"></i> Active Orders ({{ active_orders.count }})
+                        <small class="ms-2">Currently monitoring for triggers</small>
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Stock</th>
+                                    <th>Current Price</th>
+                                    <th>Stop Price</th>
+                                    <th>Distance</th>
+                                    <th>Quantity</th>
+                                    <th>Sessions</th>
+                                    <th>Activated</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for order in active_orders %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ order.stock.symbol }}</strong><br>
+                                        <small class="text-muted">{{ order.stock.name|truncatechars:30 }}</small>
+                                    </td>
+                                    <td>
+                                        {% if order.stock.current_price %}
+                                            ${{ order.stock.current_price|floatformat:2 }}
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>${{ order.stop_price|floatformat:2 }}</td>
+                                    <td>
+                                        {% if order.stock.current_price %}
+                                            {% if order.below_stop %}
+                                                <span class="text-danger">Below stop price!</span>
+                                            {% else %}
+                                                <span class="{{ order.distance_color }}">
+                                                    ${{ order.distance_dollar|floatformat:2 }} ({{ order.distance_percent|floatformat:1 }}%)
+                                                </span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ order.quantity }}</td>
+                                    <td>
+                                        <small>
+                                            {% if order.execute_in_premarket %}<span class="badge bg-info">Pre</span>{% endif %}
+                                            <span class="badge bg-primary">Regular</span>
+                                            {% if order.execute_in_afterhours %}<span class="badge bg-info">After</span>{% endif %}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        {{ order.activated_at|date:"M d" }}<br>
+                                        <small class="text-muted">{{ order.activated_at|time:"H:i" }}</small>
+                                    </td>
+                                    <td>
+                                        <form method="post" action="{% url 'cancel_premarket_order' order.id %}" class="d-inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                                    onclick="return confirm('Cancel this active order?')">
+                                                <i class="fas fa-stop"></i> Cancel
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Completed Orders -->
+    {% if completed_orders %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history"></i> Completed Orders (Last 20)
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Stock</th>
+                                    <th>Order Type</th>
+                                    <th>Stop Price</th>
+                                    <th>Executed Price</th>
+                                    <th>Quantity</th>
+                                    <th>Status</th>
+                                    <th>Session</th>
+                                    <th>Date</th>
+                                    <th>P&L Impact</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for order in completed_orders %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ order.stock.symbol }}</strong><br>
+                                        <small class="text-muted">{{ order.stock.name|truncatechars:30 }}</small>
+                                    </td>
+                                    <td>{{ order.get_order_type_display }}</td>
+                                    <td>${{ order.stop_price|floatformat:2 }}</td>
+                                    <td>
+                                        {% if order.executed_price %}
+                                            ${{ order.executed_price|floatformat:2 }}
+                                            {% if order.slippage %}
+                                                <br><small class="text-warning">Slippage: ${{ order.slippage|floatformat:2 }}</small>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ order.quantity }}</td>
+                                    <td>
+                                        {% if order.status == 'triggered' %}
+                                            <span class="badge bg-success">Triggered</span>
+                                        {% elif order.status == 'cancelled' %}
+                                            <span class="badge bg-secondary">Cancelled</span>
+                                        {% elif order.status == 'expired' %}
+                                            <span class="badge bg-warning">Expired</span>
+                                        {% else %}
+                                            <span class="badge bg-info">{{ order.get_status_display }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if order.execution_session %}
+                                            <small class="badge bg-info">{{ order.execution_session|title }}</small>
+                                        {% else %}
+                                            <small class="text-muted">N/A</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if order.executed_at %}
+                                            {{ order.executed_at|date:"M d, Y" }}<br>
+                                            <small class="text-muted">{{ order.executed_at|time:"H:i" }}</small>
+                                        {% else %}
+                                            {{ order.created_at|date:"M d, Y" }}<br>
+                                            <small class="text-muted">{{ order.created_at|time:"H:i" }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if order.executed_price and order.status == 'triggered' %}
+                                            <span class="text-info">${{ order.total_executed_amount|floatformat:2 }}</span>
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- No Orders Message -->
+    {% if not pending_orders and not active_orders and not completed_orders %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-clock fa-3x text-muted mb-3"></i>
+                    <h4>No Pre-Market Orders</h4>
+                    <p class="text-muted">You haven't created any pre-market stop loss orders yet.</p>
+                    <a href="{% url 'stock_list' %}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Create Your First Pre-Market Order
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Auto-refresh page every 30 seconds to update order statuses
+setTimeout(function() {
+    window.location.reload();
+}, 30000);
+</script>
+{% endblock %}

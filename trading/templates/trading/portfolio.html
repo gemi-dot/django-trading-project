@@ -82,9 +82,13 @@
                     {% for item in portfolio_items %}
                     <tr>
                         <td>
-                            <a href="{% url 'stock_detail' item.stock.symbol %}" class="text-decoration-none fw-bold">
-                                {{ item.stock.symbol }}
-                            </a>
+                            {% if item.stock.symbol %}
+                                <a href="{% url 'stock_detail' item.stock.symbol %}" class="text-decoration-none fw-bold">
+                                    {{ item.stock.symbol }}
+                                </a>
+                            {% else %}
+                                <span class="text-muted fw-bold">{{ item.stock.name|default:"Unknown Stock" }}</span>
+                            {% endif %}
                         </td>
                         <td>{{ item.stock.name|truncatechars:30 }}</td>
                         <td class="text-end">{{ item.quantity }}</td>
@@ -122,14 +126,18 @@
                             {% endif %}
                         </td>
                         <td>
-                            <div class="btn-group btn-group-sm">
-                                <a href="{% url 'stock_detail' item.stock.symbol %}" class="btn btn-outline-primary btn-sm">
-                                    <i class="fas fa-eye"></i>
-                                </a>
-                                <a href="{% url 'trade_stock' item.stock.symbol %}" class="btn btn-success btn-sm">
-                                    <i class="fas fa-shopping-cart"></i>
-                                </a>
-                            </div>
+                            {% if item.stock.symbol %}
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'stock_detail' item.stock.symbol %}" class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{% url 'trade_stock' item.stock.symbol %}" class="btn btn-success btn-sm">
+                                        <i class="fas fa-shopping-cart"></i>
+                                    </a>
+                                </div>
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}

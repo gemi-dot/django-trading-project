@@ -1,0 +1,285 @@
+{% extends 'trading/base.html' %}
+{% load static %}
+
+{% block title %}Pre-Market Stop Loss Setup - {{ stock.symbol }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-shield-alt text-warning"></i>
+                        Pre-Market Stop Loss Setup - {{ stock.symbol }}
+                    </h5>
+                    <div class="text-end">
+                        <span class="badge badge-{{ market_status.status|yesno:'success,danger,secondary' }}">
+                            {{ market_status.message }}
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Stock Info -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h6>{{ stock.name }}</h6>
+                            <p class="text-muted mb-0">{{ stock.exchange }} • {{ stock.sector|default:"No sector" }}</p>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <h4>${{ stock.current_price|default:"N/A" }}</h4>
+                            {% if stock.price_change %}
+                                <span class="text-{{ stock.price_change|floatformat:2|add:'0'|yesno:'success,danger,muted' }}">
+                                    {{ stock.price_change|floatformat:2 }} ({{ stock.price_change_percent|floatformat:2 }}%)
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Portfolio Info -->
+                    {% if portfolio_item %}
+                    <div class="alert alert-info">
+                        <strong>Your Position:</strong> {{ current_quantity }} shares at ${{ portfolio_item.average_price|floatformat:2 }} average
+                        {% if suggested_stop_price %}
+                            <br><small>Suggested 5% stop loss: ${{ suggested_stop_price|floatformat:2 }}</small>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        You don't currently own any {{ stock.symbol }} shares. You'll need to buy shares first before setting up stop losses.
+                    </div>
+                    {% endif %}
+
+                    <!-- Stop Loss Form -->
+                    {% if portfolio_item %}
+                    <form method="post" id="stopLossForm">
+                        {% csrf_token %}
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="order_type" class="form-label">Order Type</label>
+                                    <select class="form-select" name="order_type" id="order_type" required>
+                                        <option value="stop_loss">Stop Loss</option>
+                                        <option value="trailing_stop">Trailing Stop</option>
+                                        <option value="stop_limit">Stop Limit</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="trigger_condition" class="form-label">Trigger Condition</label>
+                                    <select class="form-select" name="trigger_condition" id="trigger_condition" required>
+                                        <option value="market_open">Activate at Market Open</option>
+                                        <option value="pre_market">Activate in Pre-Market</option>
+                                        <option value="any_session">Activate Any Session</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="quantity" class="form-label">Quantity</label>
+                                    <input type="number" class="form-control" name="quantity" id="quantity" 
+                                           min="1" max="{{ current_quantity }}" value="{{ current_quantity }}" required>
+                                    <small class="form-text text-muted">Maximum: {{ current_quantity }} shares</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="stop_price" class="form-label">Stop Price</label>
+                                    <input type="number" class="form-control" name="stop_price" id="stop_price" 
+                                           step="0.01" min="0.01" value="{{ suggested_stop_price|default:'' }}" required>
+                                    <small class="form-text text-muted">Price at which to trigger the stop loss</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Conditional fields based on order type -->
+                        <div id="stop_limit_fields" style="display: none;">
+                            <div class="mb-3">
+                                <label for="limit_price" class="form-label">Limit Price</label>
+                                <input type="number" class="form-control" name="limit_price" id="limit_price" 
+                                       step="0.01" min="0.01">
+                                <small class="form-text text-muted">Maximum price for stop-limit orders</small>
+                            </div>
+                        </div>
+
+                        <div id="trailing_stop_fields" style="display: none;">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="trail_amount" class="form-label">Trail Amount ($)</label>
+                                        <input type="number" class="form-control" name="trail_amount" id="trail_amount" 
+                                               step="0.01" min="0.01">
+                                        <small class="form-text text-muted">Fixed dollar trailing amount</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="trail_percent" class="form-label">Trail Percent (%)</label>
+                                        <input type="number" class="form-control" name="trail_percent" id="trail_percent" 
+                                               step="0.1" min="0.1" max="50">
+                                        <small class="form-text text-muted">Percentage trailing amount</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Execution Settings -->
+                        <div class="row">
+                            <div class="col-md-12">
+                                <h6>Execution Settings</h6>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="execute_in_premarket" 
+                                           id="execute_in_premarket">
+                                    <label class="form-check-label" for="execute_in_premarket">
+                                        Allow execution in pre-market hours
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="execute_in_afterhours" 
+                                           id="execute_in_afterhours">
+                                    <label class="form-check-label" for="execute_in_afterhours">
+                                        Allow execution in after-hours trading
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="strategy_name" class="form-label">Strategy Name (Optional)</label>
+                            <input type="text" class="form-control" name="strategy_name" id="strategy_name" 
+                                   placeholder="e.g., AAPL Pullback Strategy, Risk Management">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Notes (Optional)</label>
+                            <textarea class="form-control" name="notes" id="notes" rows="3" 
+                                      placeholder="Any additional notes about this stop loss order..."></textarea>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-warning btn-lg">
+                                <i class="fas fa-shield-alt"></i> Create Pre-Market Stop Loss
+                            </button>
+                        </div>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <!-- Existing Orders -->
+            {% if existing_orders %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="mb-0">Existing Orders for {{ stock.symbol }}</h6>
+                </div>
+                <div class="card-body">
+                    {% for order in existing_orders %}
+                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
+                        <div>
+                            <strong>{{ order.get_order_type_display }}</strong><br>
+                            <small class="text-muted">${{ order.stop_price }} • {{ order.quantity }} shares</small><br>
+                            <span class="badge badge-{{ order.status|yesno:'warning,success,secondary' }}">
+                                {{ order.get_status_display }}
+                            </span>
+                        </div>
+                        {% if order.status == 'pending' %}
+                        <form method="post" action="{% url 'cancel_premarket_order' order.id %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                    onclick="return confirm('Cancel this order?')">Cancel</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Help Card -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-question-circle"></i> Pre-Market Stop Loss Guide</h6>
+                </div>
+                <div class="card-body">
+                    <h6>Why Set Stop Losses Before Market Open?</h6>
+                    <ul class="small">
+                        <li>Protect against overnight gaps</li>
+                        <li>Ensure orders are active immediately when market opens</li>
+                        <li>Manage risk while you sleep</li>
+                        <li>Avoid emotional trading decisions</li>
+                    </ul>
+
+                    <h6>Order Types:</h6>
+                    <ul class="small">
+                        <li><strong>Stop Loss:</strong> Sells at market price when stop price is hit</li>
+                        <li><strong>Stop Limit:</strong> Sells at limit price or better when triggered</li>
+                        <li><strong>Trailing Stop:</strong> Adjusts stop price as stock moves in your favor</li>
+                    </ul>
+
+                    <h6>Best Practices:</h6>
+                    <ul class="small">
+                        <li>Set stop loss 5-10% below your entry price</li>
+                        <li>Consider recent support levels</li>
+                        <li>Account for overnight volatility</li>
+                        <li>Use trailing stops for trending stocks</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const orderTypeSelect = document.getElementById('order_type');
+    const stopLimitFields = document.getElementById('stop_limit_fields');
+    const trailingStopFields = document.getElementById('trailing_stop_fields');
+
+    function toggleFields() {
+        const orderType = orderTypeSelect.value;
+        
+        // Hide all conditional fields
+        stopLimitFields.style.display = 'none';
+        trailingStopFields.style.display = 'none';
+        
+        // Show relevant fields
+        if (orderType === 'stop_limit') {
+            stopLimitFields.style.display = 'block';
+        } else if (orderType === 'trailing_stop') {
+            trailingStopFields.style.display = 'block';
+        }
+    }
+
+    orderTypeSelect.addEventListener('change', toggleFields);
+    toggleFields(); // Initial call
+
+    // Risk calculation
+    const stopPriceInput = document.getElementById('stop_price');
+    const quantityInput = document.getElementById('quantity');
+    
+    function calculateRisk() {
+        const currentPrice = {{ stock.current_price|default:0 }};
+        const stopPrice = parseFloat(stopPriceInput.value) || 0;
+        const quantity = parseInt(quantityInput.value) || 0;
+        
+        if (currentPrice > 0 && stopPrice > 0 && quantity > 0) {
+            const riskPerShare = currentPrice - stopPrice;
+            const totalRisk = riskPerShare * quantity;
+            const riskPercent = (riskPerShare / currentPrice) * 100;
+            
+            console.log(`Risk: $${totalRisk.toFixed(2)} (${riskPercent.toFixed(2)}%)`);
+        }
+    }
+    
+    stopPriceInput.addEventListener('input', calculateRisk);
+    quantityInput.addEventListener('input', calculateRisk);
+});
+</script>
+{% endblock %}

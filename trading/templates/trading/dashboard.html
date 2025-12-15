@@ -1,6 +1,12 @@
 {% extends 'trading/base.html' %}
+{% load static %}
 
 {% block title %}Dashboard - Trading Platform{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{% static 'js/advanced-charts.js' %}"></script>
+{% endblock %}
 
 {% block content %}
 <!-- Market Status Banner -->
@@ -211,4 +217,595 @@
     </div>
 </div>
 {% endif %}
+
+<!-- Technical Indicators Dashboard -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-line me-2"></i>Technical Indicators Dashboard</h5>
+            </div>
+            <div class="card-body">
+                <!-- Advanced Indicators Summary Row -->
+                <div class="row mb-4">
+                    <!-- Overall Signal -->
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title text-muted">Overall Signal</h6>
+                                <div id="overallSignal" class="h4 mb-2">Hold</div>
+                                <div id="signalStrength" class="small text-muted">Strength: 50%</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RSI Level -->
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title text-muted">RSI Level</h6>
+                                <div id="rsiLevel" class="h4 mb-2">58.0</div>
+                                <div id="rsiStatus" class="small text-muted">Neutral</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Volume Activity -->
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title text-muted">Volume Activity</h6>
+                                <div id="volumeActivity" class="h4 mb-2">0.3x Avg</div>
+                                <div id="volumeStatus" class="small text-muted">Below Average</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Volatility Analysis -->
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title text-muted">Volatility Analysis</h6>
+                                <div id="volatilityLevel" class="h4 mb-2">Medium</div>
+                                <div id="volatilityTrend" class="small text-muted">Expanding</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Price Action Heatmap -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-gradient" style="background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); color: white;">
+                                <h6 class="mb-0">Price Action Heatmap</h6>
+                            </div>
+                            <div class="card-body">
+                                <div id="priceHeatmap" class="row"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <!-- RSI Chart -->
+                    <div class="col-lg-6 mb-4">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0">RSI (14) - Momentum Oscillator</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="rsiChart" height="200"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- MACD Chart -->
+                    <div class="col-lg-6 mb-4">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0">MACD - Trend Following</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="macdChart" height="200"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Moving Averages Chart -->
+                    <div class="col-lg-6 mb-4">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0">Moving Averages Comparison</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="movingAveragesChart" height="200"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bollinger Bands Chart -->
+                    <div class="col-lg-6 mb-4">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-warning text-white">
+                                <h6 class="mb-0">Bollinger Bands</h6>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="bollingerChart" height="200"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Technical Indicators Data Script -->
+{{ tech_data_json|json_script:"tech-data" }}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get technical data from Django template
+    const techDataElement = document.getElementById('tech-data');
+    let techData = null;
+    
+    try {
+        techData = JSON.parse(techDataElement.textContent);
+    } catch (e) {
+        console.error('Error parsing technical data:', e);
+        techData = {
+            labels: ['Sample'],
+            rsi_data: [50],
+            macd_data: [0],
+            macd_signal: [0],
+            prices: [100],
+            sma_20: [98],
+            sma_50: [95],
+            upper_band: [105],
+            lower_band: [95]
+        };
+    }
+
+    // Check if we have valid data
+    if (!techData || !techData.labels || techData.labels.length === 0) {
+        // Show placeholder message if no data available
+        const canvases = document.querySelectorAll('#rsiChart, #macdChart, #movingAveragesChart, #bollingerChart');
+        canvases.forEach(canvas => {
+            const ctx = canvas.getContext('2d');
+            ctx.font = '16px Arial';
+            ctx.fillStyle = '#6B7280';
+            ctx.textAlign = 'center';
+            ctx.fillText('No data available - Add stocks to portfolio', canvas.width / 2, canvas.height / 2);
+        });
+        return;
+    }
+
+    // RSI Chart
+    const rsiCtx = document.getElementById('rsiChart');
+    if (rsiCtx) {
+        new Chart(rsiCtx, {
+            type: 'line',
+            data: {
+                labels: techData.labels,
+                datasets: [{
+                    label: 'RSI',
+                    data: techData.rsi_data,
+                    borderColor: '#6366F1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    borderWidth: 2,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                let status = '';
+                                if (value > 70) status = ' (Overbought)';
+                                else if (value < 30) status = ' (Oversold)';
+                                else status = ' (Neutral)';
+                                return `RSI: ${value.toFixed(2)}${status}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        min: 0,
+                        max: 100,
+                        grid: {
+                            color: function(context) {
+                                if (context.tick.value === 70 || context.tick.value === 30) {
+                                    return '#EF4444';
+                                }
+                                return 'rgba(0,0,0,0.1)';
+                            }
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                if (value === 70) return '70 (Overbought)';
+                                if (value === 30) return '30 (Oversold)';
+                                return value;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // MACD Chart
+    const macdCtx = document.getElementById('macdChart');
+    if (macdCtx) {
+        new Chart(macdCtx, {
+            type: 'line',
+            data: {
+                labels: techData.labels,
+                datasets: [
+                    {
+                        label: 'MACD',
+                        data: techData.macd_data,
+                        borderColor: '#3B82F6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Signal',
+                        data: techData.macd_signal,
+                        borderColor: '#EF4444',
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { 
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    y: {
+                        grid: { color: 'rgba(0,0,0,0.1)' }
+                    }
+                }
+            }
+        });
+    }
+
+    // Moving Averages Chart
+    const maCtx = document.getElementById('movingAveragesChart');
+    if (maCtx) {
+        new Chart(maCtx, {
+            type: 'line',
+            data: {
+                labels: techData.labels,
+                datasets: [
+                    {
+                        label: 'Price',
+                        data: techData.prices,
+                        borderColor: '#1F2937',
+                        backgroundColor: 'rgba(31, 41, 55, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 4
+                    },
+                    {
+                        label: 'SMA 20',
+                        data: techData.sma_20,
+                        borderColor: '#10B981',
+                        borderWidth: 2,
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'SMA 50',
+                        data: techData.sma_50,
+                        borderColor: '#F59E0B',
+                        borderWidth: 2,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { 
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            title: function(context) {
+                                return `Stock: ${context[0].label}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Price ($)'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Bollinger Bands Chart
+    const bbCtx = document.getElementById('bollingerChart');
+    if (bbCtx) {
+        new Chart(bbCtx, {
+            type: 'line',
+            data: {
+                labels: techData.labels,
+                datasets: [
+                    {
+                        label: 'Upper Band',
+                        data: techData.upper_band,
+                        borderColor: '#EF4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        borderWidth: 1,
+                        fill: '+1',
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'Price',
+                        data: techData.prices,
+                        borderColor: '#1F2937',
+                        borderWidth: 3,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#1F2937'
+                    },
+                    {
+                        label: 'Lower Band',
+                        data: techData.lower_band,
+                        borderColor: '#10B981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 1,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { 
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                },
+                scales: {
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Price ($)'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Update Advanced Indicators
+    updateAdvancedIndicators(techData);
+
+    // Create Price Action Heatmap
+    createPriceHeatmap(techData);
+
+    console.log('Technical indicators charts initialized with data:', techData);
+});
+
+// Function to update advanced indicators
+function updateAdvancedIndicators(techData) {
+    if (!techData || techData.labels.length === 0) return;
+
+    // Calculate average values for overall indicators
+    const avgRSI = techData.rsi_data.reduce((a, b) => a + b, 0) / techData.rsi_data.length;
+    const avgVolumeRatio = techData.volume_ratios ? techData.volume_ratios.reduce((a, b) => a + b, 0) / techData.volume_ratios.length : 1.0;
+    const avgSignalStrength = techData.signal_strengths ? techData.signal_strengths.reduce((a, b) => a + b, 0) / techData.signal_strengths.length : 50;
+    const avgTrendStrength = techData.trend_strengths ? techData.trend_strengths.reduce((a, b) => a + b, 0) / techData.trend_strengths.length : 50;
+
+    // Update Overall Signal
+    const overallSignalEl = document.getElementById('overallSignal');
+    const signalStrengthEl = document.getElementById('signalStrength');
+    
+    let overallSignal = 'Hold';
+    let signalColor = 'text-warning';
+    
+    if (avgSignalStrength > 70) {
+        overallSignal = 'Strong Buy';
+        signalColor = 'text-success fw-bold';
+    } else if (avgSignalStrength > 60) {
+        overallSignal = 'Buy';
+        signalColor = 'text-success';
+    } else if (avgSignalStrength < 30) {
+        overallSignal = 'Strong Sell';
+        signalColor = 'text-danger fw-bold';
+    } else if (avgSignalStrength < 40) {
+        overallSignal = 'Sell';
+        signalColor = 'text-danger';
+    }
+    
+    overallSignalEl.textContent = overallSignal;
+    overallSignalEl.className = `h4 mb-2 ${signalColor}`;
+    signalStrengthEl.textContent = `Strength: ${avgSignalStrength.toFixed(1)}%`;
+
+    // Update RSI Level
+    const rsiLevelEl = document.getElementById('rsiLevel');
+    const rsiStatusEl = document.getElementById('rsiStatus');
+    
+    let rsiStatus = 'Neutral';
+    let rsiColor = 'text-secondary';
+    
+    if (avgRSI > 70) {
+        rsiStatus = 'Overbought';
+        rsiColor = 'text-danger';
+    } else if (avgRSI < 30) {
+        rsiStatus = 'Oversold';
+        rsiColor = 'text-success';
+    } else if (avgRSI > 60) {
+        rsiStatus = 'Bullish';
+        rsiColor = 'text-success';
+    } else if (avgRSI < 40) {
+        rsiStatus = 'Bearish';
+        rsiColor = 'text-danger';
+    }
+    
+    rsiLevelEl.textContent = avgRSI.toFixed(1);
+    rsiLevelEl.className = `h4 mb-2 ${rsiColor}`;
+    rsiStatusEl.textContent = rsiStatus;
+
+    // Update Volume Activity
+    const volumeActivityEl = document.getElementById('volumeActivity');
+    const volumeStatusEl = document.getElementById('volumeStatus');
+    
+    let volumeStatus = 'Normal';
+    let volumeColor = 'text-secondary';
+    
+    if (avgVolumeRatio > 2.0) {
+        volumeStatus = 'Very High';
+        volumeColor = 'text-success fw-bold';
+    } else if (avgVolumeRatio > 1.5) {
+        volumeStatus = 'Above Average';
+        volumeColor = 'text-success';
+    } else if (avgVolumeRatio < 0.5) {
+        volumeStatus = 'Very Low';
+        volumeColor = 'text-danger';
+    } else if (avgVolumeRatio < 0.8) {
+        volumeStatus = 'Below Average';
+        volumeColor = 'text-warning';
+    }
+    
+    volumeActivityEl.textContent = `${avgVolumeRatio.toFixed(1)}x Avg`;
+    volumeActivityEl.className = `h4 mb-2 ${volumeColor}`;
+    volumeStatusEl.textContent = volumeStatus;
+
+    // Update Volatility Analysis
+    const volatilityLevelEl = document.getElementById('volatilityLevel');
+    const volatilityTrendEl = document.getElementById('volatilityTrend');
+    
+    let volatilityLevel = 'Medium';
+    let volatilityTrend = 'Stable';
+    let volatilityColor = 'text-secondary';
+    
+    if (avgTrendStrength > 75) {
+        volatilityLevel = 'High';
+        volatilityTrend = 'Expanding';
+        volatilityColor = 'text-danger';
+    } else if (avgTrendStrength > 60) {
+        volatilityLevel = 'Medium-High';
+        volatilityTrend = 'Rising';
+        volatilityColor = 'text-warning';
+    } else if (avgTrendStrength < 25) {
+        volatilityLevel = 'Low';
+        volatilityTrend = 'Contracting';
+        volatilityColor = 'text-success';
+    } else if (avgTrendStrength < 40) {
+        volatilityLevel = 'Medium-Low';
+        volatilityTrend = 'Declining';
+        volatilityColor = 'text-info';
+    }
+    
+    volatilityLevelEl.textContent = volatilityLevel;
+    volatilityLevelEl.className = `h4 mb-2 ${volatilityColor}`;
+    volatilityTrendEl.textContent = volatilityTrend;
+}
+
+// Function to create price action heatmap
+function createPriceHeatmap(techData) {
+    const heatmapContainer = document.getElementById('priceHeatmap');
+    
+    if (!techData || techData.labels.length === 0) {
+        heatmapContainer.innerHTML = '<div class="col-12 text-center text-muted py-4">No data available for heatmap</div>';
+        return;
+    }
+
+    heatmapContainer.innerHTML = ''; // Clear existing content
+    
+    techData.labels.forEach((symbol, index) => {
+        const price = techData.prices[index];
+        const rsi = techData.rsi_data[index];
+        const volumeRatio = techData.volume_ratios ? techData.volume_ratios[index] : 1.0;
+        const signalStrength = techData.signal_strengths ? techData.signal_strengths[index] : 50;
+        
+        // Determine heatmap color based on multiple factors
+        let heatmapColor = '#6B7280'; // Default gray
+        let intensity = 'neutral';
+        
+        if (signalStrength > 70 && rsi < 70) {
+            heatmapColor = '#10B981'; // Strong green for strong buy
+            intensity = 'strong-bullish';
+        } else if (signalStrength > 60 && rsi < 80) {
+            heatmapColor = '#34D399'; // Light green for buy
+            intensity = 'bullish';
+        } else if (signalStrength < 30 && rsi > 30) {
+            heatmapColor = '#EF4444'; // Strong red for strong sell
+            intensity = 'strong-bearish';
+        } else if (signalStrength < 40 && rsi > 20) {
+            heatmapColor = '#F87171'; // Light red for sell
+            intensity = 'bearish';
+        } else if (rsi > 70) {
+            heatmapColor = '#F59E0B'; // Orange for overbought
+            intensity = 'overbought';
+        } else if (rsi < 30) {
+            heatmapColor = '#3B82F6'; // Blue for oversold
+            intensity = 'oversold';
+        }
+
+        // Volume indicator
+        let volumeIndicator = '';
+        if (volumeRatio > 1.5) volumeIndicator = '🔥';
+        else if (volumeRatio > 1.2) volumeIndicator = '📈';
+        else if (volumeRatio < 0.8) volumeIndicator = '📉';
+
+        const heatmapItem = document.createElement('div');
+        heatmapItem.className = 'col-lg-2 col-md-3 col-sm-4 col-6 mb-3';
+        heatmapItem.innerHTML = `
+            <div class="card border-0 shadow-sm h-100" style="background: linear-gradient(135deg, ${heatmapColor}20, ${heatmapColor}10);">
+                <div class="card-body text-center p-2">
+                    <div class="d-flex justify-content-between align-items-start mb-1">
+                        <strong style="color: ${heatmapColor};">${symbol}</strong>
+                        <span style="font-size: 0.7rem;">${volumeIndicator}</span>
+                    </div>
+                    <div class="small text-muted mb-1">$${price.toFixed(2)}</div>
+                    <div class="row g-1">
+                        <div class="col-6">
+                            <div class="small text-muted">RSI</div>
+                            <div class="fw-bold" style="color: ${heatmapColor}; font-size: 0.8rem;">${rsi.toFixed(0)}</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="small text-muted">Vol</div>
+                            <div class="fw-bold" style="color: ${heatmapColor}; font-size: 0.8rem;">${volumeRatio.toFixed(1)}x</div>
+                        </div>
+                    </div>
+                    <div class="mt-1">
+                        <span class="badge" style="background-color: ${heatmapColor}; color: white; font-size: 0.6rem;">
+                            ${intensity.replace('-', ' ').toUpperCase()}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        heatmapContainer.appendChild(heatmapItem);
+    });
+}
+</script>
 {% endblock %}

@@ -53,6 +53,41 @@ class Command(BaseCommand):
             if len(closes) >= 26:
                 tech_indicators.ema_26 = self.calculate_ema(closes, 26)
             
+            # Calculate 200 EMA and its direction
+            if len(closes) >= 200:
+                current_ema_200 = self.calculate_ema(closes, 200)
+                previous_ema_200 = None
+                
+                # Calculate previous EMA 200 if we have enough data
+                if len(closes) > 200:
+                    previous_ema_200 = self.calculate_ema(closes[:-1], 200)
+                
+                tech_indicators.ema_200 = current_ema_200
+                
+                # Determine EMA 200 direction
+                if previous_ema_200:
+                    if current_ema_200 > previous_ema_200:
+                        tech_indicators.ema_200_direction = 'up'
+                    elif current_ema_200 < previous_ema_200:
+                        tech_indicators.ema_200_direction = 'down'
+                    else:
+                        tech_indicators.ema_200_direction = 'sideways'
+                else:
+                    # For first calculation, compare with SMA 200 if available
+                    if tech_indicators.sma_200:
+                        if current_ema_200 > tech_indicators.sma_200:
+                            tech_indicators.ema_200_direction = 'up'
+                        elif current_ema_200 < tech_indicators.sma_200:
+                            tech_indicators.ema_200_direction = 'down'
+                        else:
+                            tech_indicators.ema_200_direction = 'sideways'
+                    else:
+                        tech_indicators.ema_200_direction = 'neutral'
+                
+                # Calculate price position relative to EMA 200
+                if stock.current_price and tech_indicators.ema_200:
+                    tech_indicators.price_vs_ema200 = ((stock.current_price - tech_indicators.ema_200) / tech_indicators.ema_200) * 100
+            
             # Calculate MACD
             if tech_indicators.ema_12 and tech_indicators.ema_26:
                 tech_indicators.macd_line = tech_indicators.ema_12 - tech_indicators.ema_26

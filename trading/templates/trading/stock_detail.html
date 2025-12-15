@@ -2,6 +2,45 @@
 
 {% block title %}{{ stock.symbol }} - {{ stock.name }} - Trading Platform{% endblock %}
 
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://unpkg.com/chartjs-chart-financial/dist/chartjs-chart-financial.min.js"></script>
+<style>
+.chart-container {
+    position: relative;
+    height: 400px;
+    width: 100%;
+}
+.mini-chart {
+    position: relative;
+    height: 150px;
+    width: 100%;
+}
+.indicator-gauge {
+    position: relative;
+    height: 120px;
+    width: 100%;
+}
+.chart-tabs {
+    border-bottom: 2px solid #dee2e6;
+    margin-bottom: 1rem;
+}
+.chart-tab {
+    border: none;
+    background: none;
+    padding: 0.5rem 1rem;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-weight: 500;
+}
+.chart-tab.active {
+    border-bottom-color: #0d6efd;
+    color: #0d6efd;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row">
     <div class="col-lg-8">
@@ -39,6 +78,80 @@
                 </div>
             </div>
         </div>
+
+        <!-- Interactive Price Charts -->
+        {% if price_history %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5><i class="fas fa-chart-line me-2"></i>Price Charts</h5>
+                    <div class="chart-tabs">
+                        <button class="chart-tab active" data-chart="candlestick">Candlestick</button>
+                        <button class="chart-tab" data-chart="line">Line Chart</button>
+                        <button class="chart-tab" data-chart="volume">Volume</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="mainChart"></canvas>
+                </div>
+                <div class="mt-3">
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-secondary btn-sm time-range active" data-range="1D">1D</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm time-range" data-range="5D">5D</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm time-range" data-range="1M">1M</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm time-range" data-range="3M">3M</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm time-range" data-range="YTD">YTD</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Technical Indicators Charts -->
+        {% if technical_indicators %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-area me-2"></i>Technical Indicators Dashboard</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <!-- RSI Chart -->
+                    <div class="col-md-6">
+                        <h6>RSI (14) - Momentum Oscillator</h6>
+                        <div class="mini-chart">
+                            <canvas id="rsiChart"></canvas>
+                        </div>
+                    </div>
+                    <!-- MACD Chart -->
+                    <div class="col-md-6">
+                        <h6>MACD - Trend Following</h6>
+                        <div class="mini-chart">
+                            <canvas id="macdChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <!-- Moving Averages Overlay -->
+                    <div class="col-md-6">
+                        <h6>Moving Averages Comparison</h6>
+                        <div class="mini-chart">
+                            <canvas id="movingAveragesChart"></canvas>
+                        </div>
+                    </div>
+                    <!-- Bollinger Bands -->
+                    <div class="col-md-6">
+                        <h6>Bollinger Bands</h6>
+                        <div class="mini-chart">
+                            <canvas id="bollingerChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Market Status -->
         {% if market_status %}
@@ -142,93 +255,100 @@
             </div>
         </div>
 
-        <!-- Price History -->
-        {% if price_history %}
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5><i class="fas fa-history me-2"></i>Recent Price History</h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Open</th>
-                                <th>High</th>
-                                <th>Low</th>
-                                <th>Close</th>
-                                <th>Volume</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for price in price_history|slice:":10" %}
-                            <tr>
-                                <td>{{ price.date }}</td>
-                                <td>${{ price.open_price }}</td>
-                                <td>${{ price.high_price }}</td>
-                                <td>${{ price.low_price }}</td>
-                                <td>${{ price.close_price }}</td>
-                                <td>{{ price.volume|floatformat:0 }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Technical Analysis -->
+        <!-- Enhanced Technical Analysis with Gauges -->
         {% if technical_indicators %}
         <div class="card mb-4">
             <div class="card-header">
-                <h5><i class="fas fa-chart-area me-2"></i>Technical Analysis</h5>
+                <h5><i class="fas fa-tachometer-alt me-2"></i>Technical Analysis Dashboard</h5>
             </div>
             <div class="card-body">
-                <!-- Overall Signal & Trend -->
+                <!-- Signal Gauges -->
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <h6 class="text-center">Overall Signal</h6>
+                        <div class="indicator-gauge">
+                            <canvas id="signalGauge"></canvas>
+                        </div>
+                        <div class="text-center mt-2">
+                            <span class="badge bg-{{ technical_indicators.get_signal_color }} fs-6">
+                                {{ technical_indicators.get_overall_signal_display }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="text-center">RSI Level</h6>
+                        <div class="indicator-gauge">
+                            <canvas id="rsiGauge"></canvas>
+                        </div>
+                        <div class="text-center mt-2">
+                            <span class="badge bg-primary fs-6">
+                                {{ technical_indicators.rsi_14|floatformat:1 }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="text-center">Volume Activity</h6>
+                        <div class="indicator-gauge">
+                            <canvas id="volumeGauge"></canvas>
+                        </div>
+                        <div class="text-center mt-2">
+                            <span class="badge bg-info fs-6">
+                                {{ technical_indicators.volume_ratio|floatformat:1 }}x Avg
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NEW: Advanced Chart Analysis Row -->
                 <div class="row mb-4">
                     <div class="col-md-6">
-                        <div class="card bg-light">
-                            <div class="card-body text-center">
-                                <h6 class="card-title">Overall Signal</h6>
-                                <span class="badge bg-{{ technical_indicators.get_signal_color }} fs-6">
-                                    {{ technical_indicators.get_overall_signal_display }}
-                                </span>
-                                {% if technical_indicators.signal_strength %}
-                                <div class="mt-2">
-                                    <small class="text-muted">Confidence: {{ technical_indicators.signal_strength|floatformat:0 }}%</small>
-                                    <div class="progress mt-1" style="height: 6px;">
-                                        <div class="progress-bar bg-{{ technical_indicators.get_signal_color }}" 
-                                             style="width: {{ technical_indicators.signal_strength }}%"></div>
-                                    </div>
-                                </div>
-                                {% endif %}
-                            </div>
+                        <h6>Price Action Heatmap</h6>
+                        <div class="mini-chart">
+                            <canvas id="priceHeatmap"></canvas>
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <div class="card bg-light">
-                            <div class="card-body text-center">
-                                <h6 class="card-title">Trend Direction</h6>
-                                <span class="badge bg-{{ technical_indicators.get_trend_color }} fs-6">
-                                    {{ technical_indicators.get_trend_direction_display }}
-                                </span>
-                                {% if technical_indicators.trend_strength %}
-                                <div class="mt-2">
-                                    <small class="text-muted">Strength: {{ technical_indicators.trend_strength|floatformat:0 }}%</small>
-                                    <div class="progress mt-1" style="height: 6px;">
-                                        <div class="progress-bar bg-{{ technical_indicators.get_trend_color }}" 
-                                             style="width: {{ technical_indicators.trend_strength }}%"></div>
+                        <h6>Volatility Analysis</h6>
+                        <div class="mini-chart">
+                            <canvas id="volatilityChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NEW: Market Sentiment & Pattern Recognition -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <h6><i class="fas fa-brain me-2"></i>Pattern Recognition & Sentiment</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card border-0 bg-light">
+                                    <div class="card-body text-center p-3">
+                                        <h6 class="text-muted mb-2">Detected Pattern</h6>
+                                        <div class="h5 mb-2">
+                                            <i class="fas fa-chart-line text-primary"></i>
+                                            <span id="detectedPattern">Ascending Triangle</span>
+                                        </div>
+                                        <small class="text-muted">Confidence: <span id="patternConfidence">78%</span></small>
                                     </div>
                                 </div>
-                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-0 bg-light">
+                                    <div class="card-body text-center p-3">
+                                        <h6 class="text-muted mb-2">Market Sentiment</h6>
+                                        <div class="h5 mb-2">
+                                            <i class="fas fa-users text-success"></i>
+                                            <span id="marketSentiment">Bullish</span>
+                                        </div>
+                                        <small class="text-muted">Score: <span id="sentimentScore">+0.65</span></small>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Moving Averages & Price Position -->
+                <!-- Rest of existing technical indicators... -->
                 <div class="row mb-4">
                     <div class="col-md-6">
                         <h6><i class="fas fa-chart-line me-2"></i>Moving Averages</h6>
@@ -238,6 +358,7 @@
                                     <tr>
                                         <th>Period</th>
                                         <th>Value</th>
+                                        <th>Direction</th>
                                         <th>Price Position</th>
                                     </tr>
                                 </thead>
@@ -246,6 +367,14 @@
                                     <tr>
                                         <td>SMA 20</td>
                                         <td>${{ technical_indicators.sma_20|floatformat:2 }}</td>
+                                        <td>
+                                            {% if technical_indicators.sma_20_direction %}
+                                                <span class="text-{% if technical_indicators.sma_20_direction == 'up' %}success{% elif technical_indicators.sma_20_direction == 'down' %}danger{% else %}secondary{% endif %}">
+                                                    <i class="fas fa-arrow-{% if technical_indicators.sma_20_direction == 'up' %}up{% elif technical_indicators.sma_20_direction == 'down' %}down{% else %}right{% endif %}"></i>
+                                                    {{ technical_indicators.sma_20_direction|capfirst }}
+                                                </span>
+                                            {% else %}N/A{% endif %}
+                                        </td>
                                         <td>
                                             {% if technical_indicators.price_vs_sma20 %}
                                             <span class="text-{% if technical_indicators.price_vs_sma20 >= 0 %}success{% else %}danger{% endif %}">
@@ -260,9 +389,38 @@
                                         <td>SMA 50</td>
                                         <td>${{ technical_indicators.sma_50|floatformat:2 }}</td>
                                         <td>
+                                            {% if technical_indicators.sma_50_direction %}
+                                                <span class="text-{% if technical_indicators.sma_50_direction == 'up' %}success{% elif technical_indicators.sma_50_direction == 'down' %}danger{% else %}secondary{% endif %}">
+                                                    <i class="fas fa-arrow-{% if technical_indicators.sma_50_direction == 'up' %}up{% elif technical_indicators.sma_50_direction == 'down' %}down{% else %}right{% endif %}"></i>
+                                                    {{ technical_indicators.sma_50_direction|capfirst }}
+                                                </span>
+                                            {% else %}N/A{% endif %}
+                                        </td>
+                                        <td>
                                             {% if technical_indicators.price_vs_sma50 %}
                                             <span class="text-{% if technical_indicators.price_vs_sma50 >= 0 %}success{% else %}danger{% endif %}">
                                                 {{ technical_indicators.price_vs_sma50|floatformat:1 }}%
+                                            </span>
+                                            {% else %}N/A{% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endif %}
+                                    {% if technical_indicators.ema_200 %}
+                                    <tr class="table-warning">
+                                        <td><strong>EMA 200</strong></td>
+                                        <td><strong>${{ technical_indicators.ema_200|floatformat:2 }}</strong></td>
+                                        <td>
+                                            {% if technical_indicators.ema_200_direction %}
+                                                <span class="text-{% if technical_indicators.ema_200_direction == 'up' %}success{% elif technical_indicators.ema_200_direction == 'down' %}danger{% else %}secondary{% endif %}">
+                                                    <i class="fas fa-arrow-{% if technical_indicators.ema_200_direction == 'up' %}up{% elif technical_indicators.ema_200_direction == 'down' %}down{% else %}right{% endif %}"></i>
+                                                    <strong>{{ technical_indicators.ema_200_direction|capfirst }}</strong>
+                                                </span>
+                                            {% else %}N/A{% endif %}
+                                        </td>
+                                        <td>
+                                            {% if technical_indicators.price_vs_ema200 %}
+                                            <span class="text-{% if technical_indicators.price_vs_ema200 >= 0 %}success{% else %}danger{% endif %}">
+                                                <strong>{{ technical_indicators.price_vs_ema200|floatformat:1 }}%</strong>
                                             </span>
                                             {% else %}N/A{% endif %}
                                         </td>
@@ -272,6 +430,14 @@
                                     <tr>
                                         <td>SMA 200</td>
                                         <td>${{ technical_indicators.sma_200|floatformat:2 }}</td>
+                                        <td>
+                                            {% if technical_indicators.sma_200_direction %}
+                                                <span class="text-{% if technical_indicators.sma_200_direction == 'up' %}success{% elif technical_indicators.sma_200_direction == 'down' %}danger{% else %}secondary{% endif %}">
+                                                    <i class="fas fa-arrow-{% if technical_indicators.sma_200_direction == 'up' %}up{% elif technical_indicators.sma_200_direction == 'down' %}down{% else %}right{% endif %}"></i>
+                                                    {{ technical_indicators.sma_200_direction|capfirst }}
+                                                </span>
+                                            {% else %}N/A{% endif %}
+                                        </td>
                                         <td>
                                             {% if technical_indicators.price_vs_sma200 %}
                                             <span class="text-{% if technical_indicators.price_vs_sma200 >= 0 %}success{% else %}danger{% endif %}">
@@ -446,6 +612,18 @@
     </div>
 
     <div class="col-lg-4">
+        <!-- Live Price Ticker -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-broadcast-tower me-2"></i>Live Price</h5>
+            </div>
+            <div class="card-body text-center">
+                <div class="mini-chart">
+                    <canvas id="livePriceChart"></canvas>
+                </div>
+            </div>
+        </div>
+
         <!-- Trading Actions -->
         {% if user.is_authenticated %}
         <div class="card mb-4">
@@ -534,4 +712,747 @@
         </div>
     </div>
 </div>
+
+<script>
+// Chart.js Configuration
+Chart.defaults.font.family = "'Inter', sans-serif";
+Chart.defaults.color = '#6c757d';
+
+// Sample data - replace with actual data from backend
+const priceData = [
+    {% for price in price_history|slice:":30" %}
+    {
+        x: '{{ price.date|date:"Y-m-d" }}',
+        o: {{ price.open_price }},
+        h: {{ price.high_price }},
+        l: {{ price.low_price }},
+        c: {{ price.close_price }},
+        v: {{ price.volume|default:0 }}
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+const currentPrice = {{ stock.current_price|default:0 }};
+const rsiValue = {{ technical_indicators.rsi_14|default:50 }};
+const volumeRatio = {{ technical_indicators.volume_ratio|default:1 }};
+const signalStrength = {{ technical_indicators.signal_strength|default:50 }};
+
+// Main Chart
+const mainCtx = document.getElementById('mainChart').getContext('2d');
+let mainChart = new Chart(mainCtx, {
+    type: 'candlestick',
+    data: {
+        datasets: [{
+            label: '{{ stock.symbol }} Price',
+            data: priceData,
+            borderColor: '#0d6efd',
+            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+            upColor: '#198754',
+            downColor: '#dc3545',
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: {
+                type: 'time',
+                time: {
+                    unit: 'day'
+                }
+            },
+            y: {
+                beginAtZero: false,
+                title: {
+                    display: true,
+                    text: 'Price ($)'
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            },
+            tooltip: {
+                mode: 'index',
+                intersect: false,
+            }
+        },
+        interaction: {
+            intersect: false,
+        }
+    }
+});
+
+// RSI Chart
+const rsiCtx = document.getElementById('rsiChart').getContext('2d');
+new Chart(rsiCtx, {
+    type: 'line',
+    data: {
+        labels: priceData.map(d => d.x).slice(-14),
+        datasets: [{
+            label: 'RSI',
+            data: Array.from({length: 14}, (_, i) => rsiValue + (Math.random() - 0.5) * 10),
+            borderColor: '#6f42c1',
+            backgroundColor: 'rgba(111, 66, 193, 0.1)',
+            fill: true,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                min: 0,
+                max: 100,
+                ticks: {
+                    callback: function(value) {
+                        return value + '';
+                    }
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            }
+        },
+        elements: {
+            line: {
+                tension: 0.4
+            }
+        }
+    }
+});
+
+// MACD Chart
+const macdCtx = document.getElementById('macdChart').getContext('2d');
+new Chart(macdCtx, {
+    type: 'line',
+    data: {
+        labels: priceData.map(d => d.x).slice(-20),
+        datasets: [{
+            label: 'MACD Line',
+            data: Array.from({length: 20}, (_, i) => Math.sin(i * 0.3) * 2),
+            borderColor: '#0d6efd',
+            backgroundColor: 'transparent',
+        }, {
+            label: 'Signal Line',
+            data: Array.from({length: 20}, (_, i) => Math.sin(i * 0.3 - 0.5) * 1.8),
+            borderColor: '#fd7e14',
+            backgroundColor: 'transparent',
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top'
+            }
+        },
+        elements: {
+            line: {
+                tension: 0.4
+            }
+        }
+    }
+});
+
+// Moving Averages Chart
+const maCtx = document.getElementById('movingAveragesChart').getContext('2d');
+new Chart(maCtx, {
+    type: 'line',
+    data: {
+        labels: priceData.map(d => d.x).slice(-30),
+        datasets: [{
+            label: 'Price',
+            data: priceData.map(d => d.c).slice(-30),
+            borderColor: '#212529',
+            backgroundColor: 'transparent',
+            borderWidth: 2
+        }, {
+            label: 'SMA 20',
+            data: Array.from({length: 30}, (_, i) => currentPrice + Math.sin(i * 0.1) * 5),
+            borderColor: '#0d6efd',
+            backgroundColor: 'transparent',
+            borderDash: [5, 5]
+        }, {
+            label: 'SMA 50',
+            data: Array.from({length: 30}, (_, i) => currentPrice - 2 + Math.sin(i * 0.05) * 3),
+            borderColor: '#198754',
+            backgroundColor: 'transparent',
+            borderDash: [10, 5]
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top'
+            }
+        },
+        elements: {
+            line: {
+                tension: 0.4
+            }
+        }
+    }
+});
+
+// Bollinger Bands Chart
+const bbCtx = document.getElementById('bollingerChart').getContext('2d');
+new Chart(bbCtx, {
+    type: 'line',
+    data: {
+        labels: priceData.map(d => d.x).slice(-20),
+        datasets: [{
+            label: 'Price',
+            data: priceData.map(d => d.c).slice(-20),
+            borderColor: '#212529',
+            backgroundColor: 'transparent',
+            borderWidth: 2
+        }, {
+            label: 'Upper Band',
+            data: Array.from({length: 20}, (_, i) => currentPrice + 10 + Math.sin(i * 0.1) * 2),
+            borderColor: '#dc3545',
+            backgroundColor: 'transparent',
+            fill: '+1'
+        }, {
+            label: 'Lower Band',
+            data: Array.from({length: 20}, (_, i) => currentPrice - 10 + Math.sin(i * 0.1) * 2),
+            borderColor: '#dc3545',
+            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+            fill: 'origin'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top'
+            }
+        },
+        elements: {
+            line: {
+                tension: 0.4
+            }
+        }
+    }
+});
+
+// Gauge Charts
+function createGauge(ctx, value, max, color) {
+    return new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            datasets: [{
+                data: [value, max - value],
+                backgroundColor: [color, '#e9ecef'],
+                borderWidth: 0,
+                cutout: '80%',
+                circumference: 180,
+                rotation: 270
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    enabled: false
+                }
+            }
+        }
+    });
+}
+
+// Signal Gauge
+const signalGaugeCtx = document.getElementById('signalGauge').getContext('2d');
+createGauge(signalGaugeCtx, signalStrength, 100, '#198754');
+
+// RSI Gauge
+const rsiGaugeCtx = document.getElementById('rsiGauge').getContext('2d');
+const rsiColor = rsiValue > 70 ? '#dc3545' : rsiValue < 30 ? '#198754' : '#0d6efd';
+createGauge(rsiGaugeCtx, rsiValue, 100, rsiColor);
+
+// Volume Gauge
+const volumeGaugeCtx = document.getElementById('volumeGauge').getContext('2d');
+const volumeColor = volumeRatio > 1.5 ? '#198754' : volumeRatio < 0.5 ? '#ffc107' : '#0d6efd';
+createGauge(volumeGaugeCtx, Math.min(volumeRatio * 50, 100), 100, volumeColor);
+
+// Live Price Chart
+const livePriceCtx = document.getElementById('livePriceChart').getContext('2d');
+const livePriceData = {
+    labels: [],
+    datasets: [{
+        label: 'Live Price',
+        data: [],
+        borderColor: '#198754',
+        backgroundColor: 'rgba(25, 135, 84, 0.1)',
+        fill: true,
+        tension: 0.4
+    }]
+};
+
+const livePriceChart = new Chart(livePriceCtx, {
+    type: 'line',
+    data: livePriceData,
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+            duration: 0
+        },
+        scales: {
+            x: {
+                display: false
+            },
+            y: {
+                display: true,
+                title: {
+                    display: true,
+                    text: 'Price'
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            }
+        },
+        elements: {
+            point: {
+                radius: 0
+            }
+        }
+    }
+});
+
+// Simulate live price updates
+function updateLivePrice() {
+    const now = new Date();
+    const price = currentPrice + (Math.random() - 0.5) * 2;
+    
+    livePriceData.labels.push(now.toLocaleTimeString());
+    livePriceData.datasets[0].data.push(price);
+    
+    if (livePriceData.labels.length > 50) {
+        livePriceData.labels.shift();
+        livePriceData.datasets[0].data.shift();
+    }
+    
+    livePriceChart.update('none');
+}
+
+// Update every 2 seconds
+setInterval(updateLivePrice, 2000);
+
+// Chart Tab Switching
+document.querySelectorAll('.chart-tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+        document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+        
+        const chartType = this.dataset.chart;
+        
+        switch(chartType) {
+            case 'candlestick':
+                mainChart.config.type = 'candlestick';
+                break;
+            case 'line':
+                mainChart.config.type = 'line';
+                mainChart.data.datasets[0] = {
+                    label: '{{ stock.symbol }} Price',
+                    data: priceData.map(d => ({x: d.x, y: d.c})),
+                    borderColor: '#0d6efd',
+                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                    fill: true
+                };
+                break;
+            case 'volume':
+                mainChart.config.type = 'bar';
+                mainChart.data.datasets[0] = {
+                    label: 'Volume',
+                    data: priceData.map(d => ({x: d.x, y: d.v})),
+                    backgroundColor: '#6c757d'
+                };
+                break;
+        }
+        
+        mainChart.update();
+    });
+});
+
+// Time Range Buttons
+document.querySelectorAll('.time-range').forEach(btn => {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.time-range').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        
+        // Here you would normally fetch new data based on the time range
+        console.log('Time range changed to:', this.dataset.range);
+    });
+});
+
+// Enhanced Chart Functionality
+let priceHeatmapChart, volatilityChart;
+let correlationChart, performanceChart;
+
+// Initialize all advanced charts
+function initializeAdvancedCharts() {
+    initializePriceHeatmap();
+    initializeVolatilityChart();
+    initializePatternRecognition();
+    initializeMarketSentiment();
+    initializePerformanceMetrics();
+}
+
+// Price Action Heatmap
+function initializePriceHeatmap() {
+    const ctx = document.getElementById('priceHeatmap');
+    if (!ctx) return;
+
+    const heatmapData = generateHeatmapData();
+    
+    priceHeatmapChart = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                label: 'Price Heat',
+                data: heatmapData,
+                backgroundColor: function(context) {
+                    const value = context.parsed.y;
+                    const alpha = Math.abs(value) / 5; // Normalize to 0-1
+                    return value > 0 ? `rgba(34, 197, 94, ${alpha})` : `rgba(239, 68, 68, ${alpha})`;
+                },
+                pointRadius: 8,
+                pointHoverRadius: 10
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Price Change: ${context.parsed.y.toFixed(2)}%`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { 
+                    title: { display: true, text: 'Time Periods' },
+                    grid: { display: false }
+                },
+                y: { 
+                    title: { display: true, text: 'Change %' },
+                    grid: { color: 'rgba(0,0,0,0.1)' }
+                }
+            },
+            animation: {
+                duration: 2000,
+                easing: 'easeInOutQuart'
+            }
+        }
+    });
+}
+
+// Volatility Analysis Chart
+function initializeVolatilityChart() {
+    const ctx = document.getElementById('volatilityChart');
+    if (!ctx) return;
+
+    const volatilityData = generateVolatilityData();
+    
+    volatilityChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: volatilityData.labels,
+            datasets: [{
+                label: 'Volatility',
+                data: volatilityData.values,
+                borderColor: 'rgb(168, 85, 247)',
+                backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                fill: true,
+                tension: 0.4,
+                borderWidth: 2
+            }, {
+                label: 'Market Average',
+                data: volatilityData.average,
+                borderColor: 'rgba(156, 163, 175, 0.8)',
+                borderDash: [5, 5],
+                pointRadius: 0,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { 
+                    display: true,
+                    position: 'top',
+                    labels: { usePointStyle: true }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            },
+            scales: {
+                x: { 
+                    grid: { display: false },
+                    title: { display: false }
+                },
+                y: { 
+                    title: { display: true, text: 'Volatility %' },
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            animation: {
+                duration: 1500,
+                easing: 'easeOutCubic'
+            }
+        }
+    });
+}
+
+// Pattern Recognition System
+function initializePatternRecognition() {
+    const patterns = [
+        { name: 'Ascending Triangle', confidence: 78, type: 'bullish' },
+        { name: 'Head & Shoulders', confidence: 65, type: 'bearish' },
+        { name: 'Bull Flag', confidence: 82, type: 'bullish' },
+        { name: 'Double Bottom', confidence: 71, type: 'bullish' },
+        { name: 'Wedge Pattern', confidence: 59, type: 'neutral' }
+    ];
+
+    // Simulate pattern detection based on current price data
+    const currentPattern = patterns[Math.floor(Math.random() * patterns.length)];
+    
+    document.getElementById('detectedPattern').textContent = currentPattern.name;
+    document.getElementById('patternConfidence').textContent = currentPattern.confidence + '%';
+
+    // Add visual indicator based on pattern type
+    const patternElement = document.getElementById('detectedPattern').parentElement;
+    const icon = patternElement.querySelector('i');
+    
+    switch(currentPattern.type) {
+        case 'bullish':
+            icon.className = 'fas fa-chart-line text-success';
+            break;
+        case 'bearish':
+            icon.className = 'fas fa-chart-line text-danger';
+            break;
+        default:
+            icon.className = 'fas fa-chart-line text-warning';
+    }
+}
+
+// Market Sentiment Analysis
+function initializeMarketSentiment() {
+    // Simulate sentiment analysis based on various factors
+    const sentimentScore = (Math.random() - 0.5) * 2; // -1 to 1
+    let sentiment, color;
+    
+    if (sentimentScore > 0.3) {
+        sentiment = 'Very Bullish';
+        color = 'text-success';
+    } else if (sentimentScore > 0.1) {
+        sentiment = 'Bullish';
+        color = 'text-success';
+    } else if (sentimentScore > -0.1) {
+        sentiment = 'Neutral';
+        color = 'text-warning';
+    } else if (sentimentScore > -0.3) {
+        sentiment = 'Bearish';
+        color = 'text-danger';
+    } else {
+        sentiment = 'Very Bearish';
+        color = 'text-danger';
+    }
+
+    document.getElementById('marketSentiment').textContent = sentiment;
+    document.getElementById('marketSentiment').className = color;
+    document.getElementById('sentimentScore').textContent = sentimentScore.toFixed(2);
+
+    // Update icon based on sentiment
+    const icon = document.getElementById('marketSentiment').parentElement.querySelector('i');
+    icon.className = sentimentScore > 0 ? 'fas fa-users text-success' : 'fas fa-users text-danger';
+}
+
+// Performance Metrics Dashboard
+function initializePerformanceMetrics() {
+    // Calculate and display advanced performance metrics
+    const metrics = {
+        sharpeRatio: (Math.random() * 2).toFixed(2),
+        beta: (0.5 + Math.random() * 1.5).toFixed(2),
+        alpha: (Math.random() - 0.5).toFixed(3),
+        correlation: (Math.random()).toFixed(2)
+    };
+
+    // These would be displayed in additional metric cards if needed
+    console.log('Performance Metrics:', metrics);
+}
+
+// Data generation functions
+function generateHeatmapData() {
+    const data = [];
+    for (let i = 0; i < 20; i++) {
+        data.push({
+            x: i,
+            y: (Math.random() - 0.5) * 10 // -5% to +5% change
+        });
+    }
+    return data;
+}
+
+function generateVolatilityData() {
+    const labels = [];
+    const values = [];
+    const average = [];
+    const avgVolatility = 15;
+
+    for (let i = 0; i < 30; i++) {
+        labels.push(`Day ${i + 1}`);
+        values.push(avgVolatility + (Math.random() - 0.5) * 20);
+        average.push(avgVolatility);
+    }
+
+    return { labels, values, average };
+}
+
+// Enhanced chart interactions
+function addChartInteractions() {
+    // Add zoom and pan capabilities
+    if (candlestickChart) {
+        candlestickChart.options.plugins.zoom = {
+            zoom: {
+                wheel: { enabled: true },
+                pinch: { enabled: true },
+                mode: 'x',
+            },
+            pan: {
+                enabled: true,
+                mode: 'x',
+            }
+        };
+    }
+
+    // Add crosshair functionality
+    addCrosshair();
+}
+
+function addCrosshair() {
+    const crosshair = {
+        id: 'crosshair',
+        defaults: {
+            width: 1,
+            color: '#FF4949',
+            dash: [3, 3],
+        },
+        afterInit: (chart, args, opts) => {
+            chart.crosshair = {
+                x: 0,
+                y: 0,
+            };
+        },
+        afterEvent: (chart, args, options) => {
+            const { inChartArea } = args;
+            const { type, x, y } = args.event;
+
+            chart.crosshair = { x, y, draw: inChartArea };
+            chart.draw();
+        },
+        beforeDatasetsDraw: (chart, args, options) => {
+            const { ctx } = chart;
+            const { top, bottom, left, right } = chart.chartArea;
+            const { x, y, draw } = chart.crosshair;
+            if (!draw) return;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.lineWidth = options.width || crosshair.defaults.width;
+            ctx.strokeStyle = options.color || crosshair.defaults.color;
+            ctx.setLineDash(options.dash || crosshair.defaults.dash);
+            ctx.moveTo(x, top);
+            ctx.lineTo(x, bottom);
+            ctx.moveTo(left, y);
+            ctx.lineTo(right, y);
+            ctx.stroke();
+            ctx.restore();
+        }
+    };
+
+    if (candlestickChart) {
+        Chart.register(crosshair);
+    }
+}
+
+// Export chart functionality
+function exportChart(chartId, filename) {
+    const chart = window[chartId];
+    if (chart) {
+        const url = chart.toBase64Image();
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename || 'chart.png';
+        a.click();
+    }
+}
+
+// Real-time data simulation
+function simulateRealTimeData() {
+    setInterval(() => {
+        updateLivePrice();
+        if (Math.random() > 0.7) { // 30% chance to update charts
+            updateChartData();
+        }
+    }, 5000); // Update every 5 seconds
+}
+
+function updateChartData() {
+    // Add new data point to charts
+    if (candlestickChart && candlestickChart.data.datasets[0].data.length > 0) {
+        const lastPrice = currentStock.current_price;
+        const change = (Math.random() - 0.5) * 2; // Random change
+        const newPrice = lastPrice + change;
+        
+        // Update current price
+        currentStock.current_price = newPrice;
+        
+        // Update charts with new data
+        updateGaugeCharts();
+        updateIndicatorCharts();
+    }
+}
+
+// Initialize everything when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // ...existing initialization code...
+    
+    // Initialize new advanced charts
+    setTimeout(() => {
+        initializeAdvancedCharts();
+        addChartInteractions();
+        simulateRealTimeData();
+    }, 1000); // Delay to ensure all elements are loaded
+});
+</script>
 {% endblock %}

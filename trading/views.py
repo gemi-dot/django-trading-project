@@ -10,7 +10,8 @@ from django.utils import timezone
 from django.views.generic import ListView, DetailView
 from decimal import Decimal
 from .models import (Stock, Portfolio, Trade, Watchlist, UserProfile, StockPrice, StopLossOrder, 
-                    TradingLesson, UserLessonProgress, TradingPerformance)
+                    TradingLesson, UserLessonProgress, TradingPerformance, SkillAssessment, 
+                    PracticeModule, UserPracticeSession, LearningPath, UserLearningProgress)
 
 def home(request):
     """Home page view"""
@@ -67,6 +68,79 @@ def dashboard(request):
     # Watchlist items
     watchlist_items = Watchlist.objects.filter(user=request.user).select_related('stock')[:5]
     
+    # Get technical indicators data for dashboard charts
+    from .models import TechnicalIndicators
+    import json
+    
+    # Get technical indicators for portfolio stocks or popular stocks
+    tech_data = {
+        'labels': [],
+        'rsi_data': [],
+        'macd_data': [],
+        'macd_signal': [],
+        'prices': [],
+        'sma_20': [],
+        'sma_50': [],
+        'upper_band': [],
+        'lower_band': [],
+        # Additional data for advanced indicators
+        'overall_signals': [],
+        'signal_strengths': [],
+        'volume_ratios': [],
+        'trend_strengths': [],
+        'bb_widths': []
+    }
+    
+    # Get stocks for indicators (portfolio stocks first, then popular stocks)
+    stocks_for_indicators = []
+    if portfolio_items.exists():
+        stocks_for_indicators = [item.stock for item in portfolio_items[:5]]
+    else:
+        # Get top 5 stocks with current prices if user has no portfolio
+        stocks_for_indicators = Stock.objects.filter(
+            current_price__isnull=False
+        ).order_by('-current_price')[:5]
+    
+    for stock in stocks_for_indicators:
+        try:
+            indicators = TechnicalIndicators.objects.get(stock=stock)
+            tech_data['labels'].append(stock.symbol)
+            tech_data['rsi_data'].append(float(indicators.rsi_14) if indicators.rsi_14 else 50)
+            tech_data['macd_data'].append(float(indicators.macd_line) if indicators.macd_line else 0)
+            tech_data['macd_signal'].append(float(indicators.macd_signal) if indicators.macd_signal else 0)
+            tech_data['prices'].append(float(stock.current_price) if stock.current_price else 100)
+            tech_data['sma_20'].append(float(indicators.sma_20) if indicators.sma_20 else 0)
+            tech_data['sma_50'].append(float(indicators.sma_50) if indicators.sma_50 else 0)
+            tech_data['upper_band'].append(float(indicators.bb_upper) if indicators.bb_upper else 0)
+            tech_data['lower_band'].append(float(indicators.bb_lower) if indicators.bb_lower else 0)
+            
+            # Advanced indicators data
+            tech_data['overall_signals'].append(indicators.overall_signal or 'hold')
+            tech_data['signal_strengths'].append(float(indicators.signal_strength) if indicators.signal_strength else 50)
+            tech_data['volume_ratios'].append(float(indicators.volume_ratio) if indicators.volume_ratio else 1.0)
+            tech_data['trend_strengths'].append(float(indicators.trend_strength) if indicators.trend_strength else 50)
+            tech_data['bb_widths'].append(float(indicators.bb_width) if indicators.bb_width else 0)
+            
+        except TechnicalIndicators.DoesNotExist:
+            # Use calculated sample data if no technical indicators found
+            price = float(stock.current_price) if stock.current_price else 100
+            tech_data['labels'].append(stock.symbol)
+            tech_data['rsi_data'].append(50)  # Neutral RSI
+            tech_data['macd_data'].append(0)
+            tech_data['macd_signal'].append(0)
+            tech_data['prices'].append(price)
+            tech_data['sma_20'].append(price * 0.98)
+            tech_data['sma_50'].append(price * 0.95)
+            tech_data['upper_band'].append(price * 1.05)
+            tech_data['lower_band'].append(price * 0.95)
+            
+            # Sample advanced indicators
+            tech_data['overall_signals'].append('hold')
+            tech_data['signal_strengths'].append(50)
+            tech_data['volume_ratios'].append(1.0)
+            tech_data['trend_strengths'].append(50)
+            tech_data['bb_widths'].append(price * 0.1)
+    
     context = {
         'user_profile': user_profile,
         'portfolio_items': portfolio_items,
@@ -76,438 +150,671 @@ def dashboard(request):
         'gain_loss_percent': gain_loss_percent,
         'recent_trades': recent_trades,
         'watchlist_items': watchlist_items,
+        'tech_data_json': json.dumps(tech_data),
     }
     return render(request, 'trading/dashboard.html', context)
 
 @login_required
-def learning_dashboard(request):
-    """Main learning dashboard with lessons and progress"""
-    # Get all lessons organized by category
-    lessons_by_category = {}
-    for lesson in TradingLesson.objects.all().order_by('category', 'order_index'):
-        if lesson.category not in lessons_by_category:
-            lessons_by_category[lesson.category] = []
-        
-        # Check if user has progress on this lesson
-        try:
-            progress = UserLessonProgress.objects.get(user=request.user, lesson=lesson)
-            lesson.user_progress = progress
-        except UserLessonProgress.DoesNotExist:
-            lesson.user_progress = None
-            
-        lessons_by_category[lesson.category].append(lesson)
+def skill_assessment_dashboard(request):
+    """Comprehensive skill assessment and development dashboard"""
+    from .models import SkillAssessment, PracticeModule, UserPracticeSession, LearningPath, UserLearningProgress
     
-    # Get user's overall learning stats
-    total_lessons = TradingLesson.objects.count()
-    completed_lessons = UserLessonProgress.objects.filter(
-        user=request.user, 
-        completed=True
-    ).count()
+    # Get or create skill assessments for all categories
+    skill_categories = [
+        'technical_analysis', 'fundamental_analysis', 'risk_management', 
+        'market_psychology', 'position_sizing', 'entry_timing', 
+        'exit_strategy', 'portfolio_management'
+    ]
     
-    # Get user's trading performance
-    try:
-        performance = TradingPerformance.objects.get(user=request.user)
-    except TradingPerformance.DoesNotExist:
-        # Create initial performance record
-        performance = TradingPerformance.objects.create(
+    assessments = {}
+    for category in skill_categories:
+        assessment, created = SkillAssessment.objects.get_or_create(
             user=request.user,
-            total_trades=Trade.objects.filter(user=request.user).count()
+            category=category,
+            defaults={
+                'current_level': 1,
+                'target_level': 4,
+                'knowledge_score': 30,
+                'practical_score': 20,
+                'consistency_score': 15,
+            }
         )
+        assessment.calculate_overall_score()
+        assessments[category] = assessment
     
-    # Update performance stats
-    trades = Trade.objects.filter(user=request.user, status='executed')
-    if trades.exists():
-        performance.total_trades = trades.count()
-        profitable_trades = trades.filter(
-            trade_type='sell',
-            total_amount__gt=F('quantity') * F('stock__current_price')
-        ).count()
-        performance.profitable_trades = profitable_trades
-        performance.win_rate = (profitable_trades / trades.count()) * 100 if trades.count() > 0 else 0
-        performance.save()
+    # Calculate overall trading proficiency
+    total_score = sum(a.overall_score for a in assessments.values())
+    overall_proficiency = total_score / len(assessments)
     
-    context = {
-        'lessons_by_category': lessons_by_category,
-        'total_lessons': total_lessons,
-        'completed_lessons': completed_lessons,
-        'completion_percentage': (completed_lessons / total_lessons * 100) if total_lessons > 0 else 0,
-        'performance': performance,
-    }
-    return render(request, 'trading/learning_dashboard.html', context)
-
-@login_required
-def lesson_detail(request, lesson_id):
-    """Display a specific trading lesson"""
-    lesson = get_object_or_404(TradingLesson, id=lesson_id)
+    # Get recommended practice modules
+    user_level = int(overall_proficiency // 10) + 1
+    recommended_modules = PracticeModule.objects.filter(
+        required_level__lte=user_level,
+        is_active=True
+    ).order_by('difficulty', 'title')[:6]
     
-    # Get or create user progress for this lesson
-    progress, created = UserLessonProgress.objects.get_or_create(
-        user=request.user,
-        lesson=lesson,
-        defaults={'started_at': timezone.now()}
-    )
-    
-    # Mark as completed if user clicks complete button
-    if request.method == 'POST' and request.POST.get('action') == 'complete':
-        if not progress.completed:
-            progress.completed = True
-            progress.completed_at = timezone.now()
-            progress.save()
-            messages.success(request, f'Congratulations! You completed "{lesson.title}"')
-        return redirect('lesson_detail', lesson_id=lesson.id)
-    
-    # Get next and previous lessons
-    next_lesson = TradingLesson.objects.filter(
-        category=lesson.category,
-        order_index__gt=lesson.order_index
-    ).order_by('order_index').first()
-    
-    prev_lesson = TradingLesson.objects.filter(
-        category=lesson.category,
-        order_index__lt=lesson.order_index
-    ).order_by('-order_index').first()
-    
-    context = {
-        'lesson': lesson,
-        'progress': progress,
-        'next_lesson': next_lesson,
-        'prev_lesson': prev_lesson,
-    }
-    return render(request, 'trading/lesson_detail.html', context)
-
-@login_required
-def trading_performance(request):
-    """Detailed trading performance analytics"""
-    # Get or create performance record
-    performance, created = TradingPerformance.objects.get_or_create(
-        user=request.user,
-        defaults={'total_trades': 0}
-    )
-    
-    # Get all user's trades
-    trades = Trade.objects.filter(
-        user=request.user, 
-        status='executed'
-    ).select_related('stock').order_by('-execution_date')
-    
-    # Calculate detailed statistics
-    buy_trades = trades.filter(trade_type='buy')
-    sell_trades = trades.filter(trade_type='sell')
-    
-    total_invested = buy_trades.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-    total_received = sell_trades.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-    
-    # Calculate current portfolio value
-    portfolio_value = Portfolio.objects.filter(user=request.user).aggregate(
-        total=Sum(F('quantity') * F('stock__current_price'))
-    )['total'] or 0
-    
-    # Recent trading activity (last 30 days)
-    thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
-    recent_trades = trades.filter(execution_date__gte=thirty_days_ago)
-    
-    # Monthly performance
-    monthly_stats = []
-    for i in range(6):  # Last 6 months
-        month_start = (timezone.now() - timezone.timedelta(days=30*i)).replace(day=1)
-        month_end = (month_start + timezone.timedelta(days=32)).replace(day=1) - timezone.timedelta(days=1)
-        
-        month_trades = trades.filter(
-            execution_date__gte=month_start,
-            execution_date__lte=month_end
-        )
-        
-        monthly_stats.append({
-            'month': month_start.strftime('%B %Y'),
-            'trades': month_trades.count(),
-            'volume': month_trades.aggregate(Sum('total_amount'))['total_amount__sum'] or 0,
-        })
-    
-    # Update performance record
-    performance.total_trades = trades.count()
-    performance.total_profit_loss = total_received - total_invested + portfolio_value
-    performance.save()
-    
-    context = {
-        'performance': performance,
-        'trades': trades[:20],  # Latest 20 trades
-        'buy_trades_count': buy_trades.count(),
-        'sell_trades_count': sell_trades.count(),
-        'total_invested': total_invested,
-        'total_received': total_received,
-        'portfolio_value': portfolio_value,
-        'recent_trades_count': recent_trades.count(),
-        'monthly_stats': monthly_stats,
-    }
-    return render(request, 'trading/trading_performance.html', context)
-
-class StockListView(ListView):
-    """List all stocks with search and filter functionality"""
-    model = Stock
-    template_name = 'trading/stock_list.html'
-    context_object_name = 'stocks'
-    paginate_by = 20
-    
-    def get_queryset(self):
-        queryset = Stock.objects.all()
-        
-        # Search functionality
-        query = self.request.GET.get('q')
-        if query:
-            queryset = queryset.filter(
-                Q(symbol__icontains=query) |
-                Q(name__icontains=query) |
-                Q(sector__icontains=query)
-            )
-        
-        # Filter by exchange
-        exchange = self.request.GET.get('exchange')
-        if exchange:
-            queryset = queryset.filter(exchange=exchange)
-        
-        # Filter by sector
-        sector = self.request.GET.get('sector')
-        if sector:
-            queryset = queryset.filter(sector=sector)
-        
-        return queryset.order_by('symbol')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['exchanges'] = Stock.objects.values_list('exchange', flat=True).distinct()
-        context['sectors'] = Stock.objects.values_list('sector', flat=True).distinct().exclude(sector__isnull=True)
-        context['query'] = self.request.GET.get('q', '')
-        context['selected_exchange'] = self.request.GET.get('exchange', '')
-        context['selected_sector'] = self.request.GET.get('sector', '')
-        return context
-
-class StockDetailView(DetailView):
-    """Detailed view of a single stock"""
-    model = Stock
-    template_name = 'trading/stock_detail.html'
-    context_object_name = 'stock'
-    slug_field = 'symbol'
-    slug_url_kwarg = 'symbol'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        stock = self.get_object()
-        
-        # Get market status for this stock's exchange
-        context['market_status'] = get_market_status_for_stock(stock)
-        
-        # Get recent price history
-        context['price_history'] = StockPrice.objects.filter(
-            stock=stock
-        ).order_by('-date')[:30]
-        
-        # Get technical indicators
-        try:
-            tech_indicators = stock.technical_indicators
-            context['technical_indicators'] = tech_indicators
-            
-            # Calculate support and resistance distances
-            if stock.current_price and tech_indicators.support_level:
-                tech_indicators.support_distance = stock.current_price - tech_indicators.support_level
-            
-            if stock.current_price and tech_indicators.resistance_level:
-                tech_indicators.resistance_distance = tech_indicators.resistance_level - stock.current_price
-                
-        except:
-            context['technical_indicators'] = None
-        
-        # Check if user has this stock in portfolio
-        if self.request.user.is_authenticated:
-            try:
-                context['portfolio_item'] = Portfolio.objects.get(
-                    user=self.request.user, 
-                    stock=stock
-                )
-            except Portfolio.DoesNotExist:
-                context['portfolio_item'] = None
-            
-            # Check if stock is in user's watchlist
-            context['in_watchlist'] = Watchlist.objects.filter(
-                user=self.request.user,
-                stock=stock
-            ).exists()
-        
-        return context
-
-@login_required
-def portfolio_view(request):
-    """User's portfolio with detailed holdings"""
-    portfolio_items = Portfolio.objects.filter(
+    # Recent practice sessions
+    recent_sessions = UserPracticeSession.objects.filter(
         user=request.user
-    ).select_related('stock').order_by('-current_value')
+    ).select_related('module').order_by('-started_at')[:10]
     
-    # Update current values for each portfolio item
-    for item in portfolio_items:
-        if item.stock.current_price:
-            item.current_value = item.quantity * item.stock.current_price
-            item.gain_loss = item.current_value - (item.quantity * item.average_price)
-            if item.average_price > 0:
-                item.gain_loss_percent = (item.gain_loss / (item.quantity * item.average_price)) * 100
-            item.save()
+    # Learning path progress
+    learning_progress = UserLearningProgress.objects.filter(
+        user=request.user,
+        is_completed=False
+    ).select_related('path').first()
     
-    # Portfolio summary
-    total_value = sum(item.current_value or 0 for item in portfolio_items)
-    total_invested = sum(item.quantity * item.average_price for item in portfolio_items)
-    total_gain_loss = total_value - total_invested
+    # Generate personalized recommendations
+    recommendations = generate_skill_recommendations(request.user, assessments)
     
     context = {
-        'portfolio_items': portfolio_items,
-        'total_value': total_value,
-        'total_invested': total_invested,
-        'total_gain_loss': total_gain_loss,
-        'gain_loss_percent': (total_gain_loss / total_invested * 100) if total_invested > 0 else 0,
+        'assessments': assessments,
+        'overall_proficiency': overall_proficiency,
+        'overall_grade': get_grade_from_score(overall_proficiency),
+        'recommended_modules': recommended_modules,
+        'recent_sessions': recent_sessions,
+        'learning_progress': learning_progress,
+        'recommendations': recommendations,
+        'skill_categories': skill_categories,
+    }
+    return render(request, 'trading/skill_assessment_dashboard.html', context)
+
+def generate_skill_recommendations(user, assessments):
+    """Generate personalized skill development recommendations"""
+    recommendations = []
+    
+    # Find weakest skills
+    weakest_skills = sorted(assessments.items(), key=lambda x: x[1].overall_score)[:3]
+    
+    for skill_name, assessment in weakest_skills:
+        recs = assessment.recommend_next_steps()
+        for rec in recs:
+            rec['skill'] = skill_name.replace('_', ' ').title()
+            recommendations.append(rec)
+    
+    # Add trading performance based recommendations
+    try:
+        performance = user.trading_performance
+        
+        if performance.win_rate < 50:
+            recommendations.append({
+                'type': 'strategy',
+                'priority': 'high',
+                'skill': 'Overall Strategy',
+                'action': 'Focus on high-probability setups only',
+                'time_estimate': 'Daily review'
+            })
+        
+        if performance.stop_loss_usage_rate < 70:
+            recommendations.append({
+                'type': 'risk',
+                'priority': 'critical',
+                'skill': 'Risk Management',
+                'action': 'Practice with stop-loss on every trade',
+                'time_estimate': 'Immediate implementation'
+            })
+            
+    except:
+        pass
+    
+    return recommendations[:6]  # Return top 6 recommendations
+
+def get_grade_from_score(score):
+    """Convert numeric score to letter grade"""
+    if score >= 95: return 'A+'
+    elif score >= 90: return 'A'
+    elif score >= 85: return 'A-'
+    elif score >= 80: return 'B+'
+    elif score >= 75: return 'B'
+    elif score >= 70: return 'B-'
+    elif score >= 65: return 'C+'
+    elif score >= 60: return 'C'
+    elif score >= 55: return 'C-'
+    else: return 'F'
+
+@login_required
+def practice_module_detail(request, module_id):
+    """Practice module interface"""
+    from .models import PracticeModule, UserPracticeSession
+    
+    module = get_object_or_404(PracticeModule, id=module_id, is_active=True)
+    
+    # Check if user has required skill level
+    user_sessions = UserPracticeSession.objects.filter(
+        user=request.user,
+        module=module
+    ).order_by('-started_at')
+    
+    attempts_used = user_sessions.count()
+    can_attempt = attempts_used < module.max_attempts
+    
+    # Get user's best score
+    best_session = user_sessions.filter(status='completed').order_by('-score').first()
+    best_score = best_session.score if best_session else 0
+    
+    if request.method == 'POST' and can_attempt:
+        # Start new practice session
+        session = UserPracticeSession.objects.create(
+            user=request.user,
+            module=module,
+            attempt_number=attempts_used + 1
+        )
+        
+        # Redirect to practice interface based on module type
+        if module.module_type == 'quiz':
+            return redirect('practice_quiz', session_id=session.id)
+        elif module.module_type == 'simulation':
+            return redirect('practice_simulation', session_id=session.id)
+        elif module.module_type == 'pattern_recognition':
+            return redirect('practice_pattern_recognition', session_id=session.id)
+    
+    context = {
+        'module': module,
+        'user_sessions': user_sessions,
+        'attempts_used': attempts_used,
+        'can_attempt': can_attempt,
+        'best_score': best_score,
+    }
+    return render(request, 'trading/practice_module_detail.html', context)
+
+@login_required
+def practice_quiz(request, session_id):
+    """Interactive quiz practice"""
+    from .models import UserPracticeSession
+    
+    session = get_object_or_404(UserPracticeSession, id=session_id, user=request.user)
+    
+    if session.status == 'completed':
+        return redirect('practice_results', session_id=session.id)
+    
+    # Mark session as in progress
+    if session.status == 'started':
+        session.status = 'in_progress'
+        session.save()
+    
+    # Get quiz questions from module content
+    questions = session.module.content_data.get('questions', [])
+    
+    if request.method == 'POST':
+        # Process quiz submission
+        user_answers = {}
+        score = 0
+        total_questions = len(questions)
+        
+        for i, question in enumerate(questions):
+            answer_key = f'question_{i}'
+            user_answer = request.POST.get(answer_key)
+            user_answers[i] = user_answer
+            
+            if user_answer == question.get('correct_answer'):
+                score += 1
+        
+        # Calculate final score
+        final_score = (score / total_questions) * 100 if total_questions > 0 else 0
+        
+        # Update session
+        session.status = 'completed'
+        session.completed_at = timezone.now()
+        session.score = final_score
+        session.accuracy = final_score  # For quiz, accuracy = score
+        session.answers = user_answers
+        
+        # Analyze performance
+        strengths = []
+        weaknesses = []
+        
+        for i, question in enumerate(questions):
+            if user_answers.get(i) == question.get('correct_answer'):
+                strengths.append(question.get('topic', 'General'))
+            else:
+                weaknesses.append(question.get('topic', 'General'))
+        
+        session.strengths_identified = list(set(strengths))
+        session.weaknesses_identified = list(set(weaknesses))
+        
+        if final_score < 70:
+            session.recommended_focus = "Review fundamental concepts and retake practice modules"
+        elif final_score < 85:
+            session.recommended_focus = "Focus on areas where you missed questions"
+        else:
+            session.recommended_focus = "Excellent work! Try more advanced modules"
+        
+        session.save()
+        
+        return redirect('practice_results', session_id=session.id)
+    
+    context = {
+        'session': session,
+        'questions': questions,
+    }
+    return render(request, 'trading/practice_quiz.html', context)
+
+@login_required
+def practice_results(request, session_id):
+    """Display practice session results and recommendations"""
+    from .models import UserPracticeSession, SkillAssessment
+    
+    session = get_object_or_404(UserPracticeSession, id=session_id, user=request.user)
+    
+    # Update skill assessments based on performance
+    if session.status == 'completed' and session.score >= session.module.passing_score:
+        # Apply skill improvements
+        improvements = session.calculate_skill_improvement()
+        
+        if improvements.get('points', 0) > 0:
+            # Update related skill assessments
+            for skill_assessment in session.module.target_skills.filter(user=request.user):
+                skill_assessment.practical_score += improvements['points']
+                skill_assessment.practical_score = min(skill_assessment.practical_score, 100)
+                skill_assessment.calculate_overall_score()
+    
+    # Get recommendations for next steps
+    next_recommendations = []
+    
+    if session.score >= 85:
+        # Suggest advanced modules
+        advanced_modules = PracticeModule.objects.filter(
+            difficulty__in=['advanced', 'expert'],
+            is_active=True
+        ).exclude(id=session.module.id)[:3]
+        
+        for module in advanced_modules:
+            next_recommendations.append({
+                'type': 'advance',
+                'title': f"Try {module.title}",
+                'url': f"/practice/module/{module.id}/",
+                'difficulty': module.difficulty
+            })
+    
+    elif session.score < 70:
+        # Suggest reviewing basics
+        basic_modules = PracticeModule.objects.filter(
+            difficulty='beginner',
+            is_active=True
+        ).exclude(id=session.module.id)[:3]
+        
+        for module in basic_modules:
+            next_recommendations.append({
+                'type': 'review',
+                'title': f"Review with {module.title}",
+                'url': f"/practice/module/{module.id}/",
+                'difficulty': module.difficulty
+            })
+    
+    context = {
+        'session': session,
+        'next_recommendations': next_recommendations,
+        'grade': get_grade_from_score(session.score),
+    }
+    return render(request, 'trading/practice_results.html', context)
+
+@login_required
+def stock_list(request):
+    """Stock list view with search and filtering"""
+    search_query = request.GET.get('search', '')
+    
+    # Start with all stocks
+    stocks = Stock.objects.all()
+    
+    # Apply search filter
+    if search_query:
+        stocks = stocks.filter(
+            Q(symbol__icontains=search_query) | 
+            Q(name__icontains=search_query)
+        )
+    
+    # Order by symbol
+    stocks = stocks.order_by('symbol')
+    
+    # Pagination
+    paginator = Paginator(stocks, 20)  # Show 20 stocks per page
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'stocks': page_obj,
+        'search_query': search_query,
+        'total_stocks': stocks.count(),
+    }
+    return render(request, 'trading/stock_list.html', context)
+
+@login_required
+def stock_detail(request, symbol):
+    """Stock detail view with technical indicators and trading interface"""
+    stock = get_object_or_404(Stock, symbol=symbol.upper())
+    
+    # Get technical indicators if available
+    try:
+        technical_indicators = stock.technical_indicators
+    except:
+        technical_indicators = None
+    
+    # Check if stock is in user's watchlist
+    in_watchlist = Watchlist.objects.filter(user=request.user, stock=stock).exists()
+    
+    # Get user's portfolio position for this stock
+    try:
+        portfolio_position = Portfolio.objects.get(user=request.user, stock=stock)
+    except Portfolio.DoesNotExist:
+        portfolio_position = None
+    
+    # Get recent trades for this stock by the user
+    recent_trades = Trade.objects.filter(
+        user=request.user, 
+        stock=stock
+    ).order_by('-order_date')[:5]
+    
+    # Get recent price history (last 30 days)
+    recent_prices = StockPrice.objects.filter(
+        stock=stock
+    ).order_by('-date')[:30]
+    
+    context = {
+        'stock': stock,
+        'technical_indicators': technical_indicators,
+        'in_watchlist': in_watchlist,
+        'portfolio_position': portfolio_position,
+        'recent_trades': recent_trades,
+        'recent_prices': recent_prices,
+    }
+    return render(request, 'trading/stock_detail.html', context)
+
+@login_required
+def market_hours(request):
+    """Market hours and trading sessions view"""
+    from .models import TradingHours, MarketHoliday
+    import pytz
+    from datetime import datetime
+    
+    # Get all trading hours for different exchanges
+    trading_hours = TradingHours.objects.all().order_by('exchange')
+    
+    # Get current market status for each exchange
+    market_status = {}
+    current_time = timezone.now()
+    
+    for hours in trading_hours:
+        status_info = hours.get_market_status(current_time)
+        market_status[hours.exchange] = status_info
+    
+    # Get upcoming market holidays
+    upcoming_holidays = MarketHoliday.objects.filter(
+        date__gte=current_time.date()
+    ).order_by('date')[:10]
+    
+    # Calculate trading session times for different timezones
+    timezones_info = []
+    timezone_list = [
+        ('America/New_York', 'New York (EST/EDT)'),
+        ('Europe/London', 'London (GMT/BST)'),
+        ('Asia/Tokyo', 'Tokyo (JST)'),
+        ('Asia/Hong_Kong', 'Hong Kong (HKT)'),
+        ('Asia/Manila', 'Manila (PHT)'),
+        ('Asia/Singapore', 'Singapore (SGT)'),
+    ]
+    
+    for tz_name, tz_display in timezone_list:
+        try:
+            tz = pytz.timezone(tz_name)
+            local_time = current_time.astimezone(tz)
+            timezones_info.append({
+                'name': tz_display,
+                'time': local_time,
+                'timezone': tz_name,
+            })
+        except:
+            pass
+    
+    context = {
+        'trading_hours': trading_hours,
+        'market_status': market_status,
+        'upcoming_holidays': upcoming_holidays,
+        'timezones_info': timezones_info,
+        'current_time': current_time,
+    }
+    return render(request, 'trading/market_hours.html', context)
+
+@login_required
+def philippine_trading_times(request):
+    """Philippine stock market trading times and schedule"""
+    from .models import TradingHours, MarketHoliday
+    import pytz
+    from datetime import datetime, time
+    
+    # Get Philippine timezone
+    ph_tz = pytz.timezone('Asia/Manila')
+    current_time = timezone.now()
+    ph_current_time = current_time.astimezone(ph_tz)
+    
+    # Philippine Stock Exchange (PSE) trading hours
+    pse_trading_schedule = {
+        'pre_open': {
+            'start': time(9, 0),   # 9:00 AM
+            'end': time(9, 30),    # 9:30 AM
+            'description': 'Pre-opening session for order entry'
+        },
+        'morning_session': {
+            'start': time(9, 30),  # 9:30 AM
+            'end': time(12, 0),    # 12:00 PM
+            'description': 'Morning trading session'
+        },
+        'lunch_break': {
+            'start': time(12, 0),  # 12:00 PM
+            'end': time(13, 30),   # 1:30 PM
+            'description': 'Lunch break - market closed'
+        },
+        'afternoon_session': {
+            'start': time(13, 30), # 1:30 PM
+            'end': time(15, 30),   # 3:30 PM
+            'description': 'Afternoon trading session'
+        },
+        'runoff': {
+            'start': time(15, 30), # 3:30 PM
+            'end': time(15, 40),   # 3:40 PM
+            'description': 'Runoff period for closing trades'
+        }
+    }
+    
+    # Determine current market status
+    current_time_only = ph_current_time.time()
+    current_status = 'closed'
+    next_session = None
+    time_to_next = None
+    
+    if time(9, 0) <= current_time_only < time(9, 30):
+        current_status = 'pre_open'
+        next_session = 'Morning Trading'
+        time_to_next = datetime.combine(ph_current_time.date(), time(9, 30)) - datetime.combine(ph_current_time.date(), current_time_only)
+    elif time(9, 30) <= current_time_only < time(12, 0):
+        current_status = 'morning_session'
+        next_session = 'Lunch Break'
+        time_to_next = datetime.combine(ph_current_time.date(), time(12, 0)) - datetime.combine(ph_current_time.date(), current_time_only)
+    elif time(12, 0) <= current_time_only < time(13, 30):
+        current_status = 'lunch_break'
+        next_session = 'Afternoon Trading'
+        time_to_next = datetime.combine(ph_current_time.date(), time(13, 30)) - datetime.combine(ph_current_time.date(), current_time_only)
+    elif time(13, 30) <= current_time_only < time(15, 30):
+        current_status = 'afternoon_session'
+        next_session = 'Runoff Period'
+        time_to_next = datetime.combine(ph_current_time.date(), time(15, 30)) - datetime.combine(ph_current_time.date(), current_time_only)
+    elif time(15, 30) <= current_time_only < time(15, 40):
+        current_status = 'runoff'
+        next_session = 'Market Closed'
+        time_to_next = datetime.combine(ph_current_time.date(), time(15, 40)) - datetime.combine(ph_current_time.date(), current_time_only)
+    
+    # Get Philippine market holidays
+    ph_holidays = MarketHoliday.objects.filter(
+        exchange='PSE',
+        date__gte=ph_current_time.date()
+    ).order_by('date')[:10]
+    
+    # Check if today is a holiday or weekend
+    is_weekend = ph_current_time.weekday() >= 5  # Saturday = 5, Sunday = 6
+    is_holiday = MarketHoliday.objects.filter(
+        exchange='PSE',
+        date=ph_current_time.date()
+    ).exists()
+    
+    if is_weekend or is_holiday:
+        current_status = 'closed_holiday'
+        if is_weekend:
+            next_session = 'Opens Monday 9:00 AM'
+        else:
+            next_session = 'Holiday - Check schedule'
+    
+    # PSE sector information
+    pse_sectors = [
+        {'name': 'Banking', 'code': 'BNK', 'description': 'Commercial banks and financial services'},
+        {'name': 'Mining & Oil', 'code': 'MIN', 'description': 'Mining companies and oil exploration'},
+        {'name': 'Property', 'code': 'PRO', 'description': 'Real estate and property development'},
+        {'name': 'Industrial', 'code': 'IND', 'description': 'Manufacturing and industrial companies'},
+        {'name': 'Services', 'code': 'SVC', 'description': 'Service sector companies'},
+        {'name': 'Holding Firms', 'code': 'HLD', 'description': 'Investment and holding companies'},
+    ]
+    
+    # Trading fees and costs
+    trading_costs = {
+        'broker_commission': '0.25%',
+        'sales_tax': '0.60%',
+        'pse_transaction_fee': '0.005%',
+        'sccp_fee': '0.01%',
+        'minimum_commission': 'PHP 20.00'
+    }
+    
+    context = {
+        'pse_trading_schedule': pse_trading_schedule,
+        'current_status': current_status,
+        'next_session': next_session,
+        'time_to_next': time_to_next,
+        'ph_current_time': ph_current_time,
+        'ph_holidays': ph_holidays,
+        'is_weekend': is_weekend,
+        'is_holiday': is_holiday,
+        'pse_sectors': pse_sectors,
+        'trading_costs': trading_costs,
+    }
+    return render(request, 'trading/philippine_trading_times.html', context)
+
+@login_required
+def portfolio(request):
+    """Portfolio view showing all user's holdings"""
+    user_profile, created = UserProfile.objects.get_or_create(user=request.user)
+    
+    # Get user's portfolio items - include error handling for corrupted data
+    try:
+        portfolio_items_queryset = Portfolio.objects.filter(
+            user=request.user
+        ).select_related('stock')
+        
+        # Filter out problematic entries
+        valid_portfolio_items = []
+        problematic_items = []
+        
+        for item in portfolio_items_queryset:
+            try:
+                # Test if we can access stock data
+                if (item.stock and 
+                    item.stock.symbol and 
+                    item.stock.symbol.strip() != '' and
+                    item.stock.name and 
+                    item.stock.name.strip() != ''):
+                    valid_portfolio_items.append(item)
+                else:
+                    problematic_items.append(item)
+            except Exception as e:
+                problematic_items.append(item)
+        
+        # Log problematic items for debugging
+        if problematic_items:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Found {len(problematic_items)} problematic portfolio entries for user {request.user.username}")
+            for item in problematic_items:
+                try:
+                    logger.warning(f"Problematic portfolio item ID: {item.id}, Stock ID: {item.stock_id if hasattr(item, 'stock_id') else 'N/A'}")
+                except:
+                    logger.warning(f"Severely corrupted portfolio item ID: {item.id}")
+        
+        portfolio_items = valid_portfolio_items
+        
+    except Exception as e:
+        # Fallback in case of severe database issues
+        portfolio_items = []
+        messages.error(request, "There was an issue loading your portfolio. Please contact support if this persists.")
+    
+    # Calculate detailed portfolio statistics
+    portfolio_stats = {
+        'total_value': Decimal('0.00'),
+        'total_invested': Decimal('0.00'),
+        'total_gain_loss': Decimal('0.00'),
+        'gain_loss_percent': 0,
+        'best_performer': None,
+        'worst_performer': None,
+        'total_positions': len(portfolio_items)
+    }
+    
+    # Calculate stats for each position
+    portfolio_data = []
+    for item in portfolio_items:
+        try:
+            current_value = item.quantity * item.stock.current_price if item.stock.current_price else Decimal('0.00')
+            invested_amount = item.quantity * item.average_price
+            gain_loss = current_value - invested_amount
+            gain_loss_percent = (gain_loss / invested_amount * 100) if invested_amount > 0 else 0
+            
+            portfolio_data.append({
+                'item': item,
+                'current_value': current_value,
+                'invested_amount': invested_amount,
+                'gain_loss': gain_loss,
+                'gain_loss_percent': gain_loss_percent,
+            })
+            
+            # Update totals
+            portfolio_stats['total_value'] += current_value
+            portfolio_stats['total_invested'] += invested_amount
+            
+            # Track best/worst performers
+            if not portfolio_stats['best_performer'] or gain_loss_percent > portfolio_stats['best_performer']['gain_loss_percent']:
+                portfolio_stats['best_performer'] = {
+                    'stock': item.stock,
+                    'gain_loss_percent': gain_loss_percent,
+                    'gain_loss': gain_loss
+                }
+            
+            if not portfolio_stats['worst_performer'] or gain_loss_percent < portfolio_stats['worst_performer']['gain_loss_percent']:
+                portfolio_stats['worst_performer'] = {
+                    'stock': item.stock,
+                    'gain_loss_percent': gain_loss_percent,
+                    'gain_loss': gain_loss
+                }
+        except Exception as e:
+            # Skip problematic items in calculations
+            continue
+    
+    # Calculate overall portfolio performance
+    portfolio_stats['total_gain_loss'] = portfolio_stats['total_value'] - portfolio_stats['total_invested']
+    if portfolio_stats['total_invested'] > 0:
+        portfolio_stats['gain_loss_percent'] = (portfolio_stats['total_gain_loss'] / portfolio_stats['total_invested']) * 100
+    
+    # Add cleanup message if there were problematic items
+    if 'problematic_items' in locals() and problematic_items:
+        messages.warning(request, f"Some portfolio entries had data issues and were excluded from display. Contact support to clean up your portfolio data.")
+    
+    context = {
+        'portfolio_items': portfolio_data,
+        'portfolio_stats': portfolio_stats,
+        'total_value': portfolio_stats['total_value'],
+        'total_invested': portfolio_stats['total_invested'],
+        'total_gain_loss': portfolio_stats['total_gain_loss'],
+        'gain_loss_percent': portfolio_stats['gain_loss_percent'],
     }
     return render(request, 'trading/portfolio.html', context)
 
 @login_required
-def trade_stock(request, symbol):
-    """Trade (buy/sell) a stock"""
-    stock = get_object_or_404(Stock, symbol=symbol)
-    user_profile, created = UserProfile.objects.get_or_create(user=request.user)
-    
-    # Get user's current holding of this stock
-    try:
-        portfolio_item = Portfolio.objects.get(user=request.user, stock=stock)
-        current_quantity = portfolio_item.quantity
-    except Portfolio.DoesNotExist:
-        portfolio_item = None
-        current_quantity = 0
-    
-    if request.method == 'POST':
-        trade_type = request.POST.get('trade_type')
-        order_type = request.POST.get('order_type', 'market')
-        quantity = int(request.POST.get('quantity', 0))
-        price = Decimal(request.POST.get('price', stock.current_price or 0))
-        stop_loss_price = request.POST.get('stop_loss_price')
-        
-        if quantity <= 0:
-            messages.error(request, 'Quantity must be greater than 0.')
-            return redirect('stock_detail', symbol=symbol)
-        
-        total_amount = quantity * price
-        
-        # Convert stop_loss_price to Decimal if provided
-        if stop_loss_price:
-            try:
-                stop_loss_price = Decimal(stop_loss_price)
-            except:
-                stop_loss_price = None
-        
-        if trade_type == 'buy':
-            # Check if user has sufficient balance
-            if user_profile.account_balance < total_amount:
-                messages.error(request, 'Insufficient account balance.')
-                return redirect('stock_detail', symbol=symbol)
-            
-            # Create trade record
-            trade = Trade.objects.create(
-                user=request.user,
-                stock=stock,
-                trade_type='buy',
-                order_type=order_type,
-                quantity=quantity,
-                price=price,
-                stop_loss_price=stop_loss_price,
-                total_amount=total_amount,
-                status='executed',
-                execution_date=timezone.now()
-            )
-            
-            # Update user's balance
-            user_profile.account_balance -= total_amount
-            user_profile.save()
-            
-            # Update or create portfolio item
-            if portfolio_item:
-                # Calculate new average price
-                total_shares = portfolio_item.quantity + quantity
-                total_cost = (portfolio_item.quantity * portfolio_item.average_price) + total_amount
-                portfolio_item.average_price = total_cost / total_shares
-                portfolio_item.quantity = total_shares
-                portfolio_item.save()
-            else:
-                Portfolio.objects.create(
-                    user=request.user,
-                    stock=stock,
-                    quantity=quantity,
-                    average_price=price
-                )
-            
-            # Create stop-loss order if specified
-            if stop_loss_price and stop_loss_price < stock.current_price:
-                StopLossOrder.objects.create(
-                    user=request.user,
-                    stock=stock,
-                    quantity=quantity,
-                    stop_price=stop_loss_price,
-                    status='active'
-                )
-                messages.success(request, f'Successfully bought {quantity} shares of {stock.symbol} with stop-loss at ${stop_loss_price}!')
-            else:
-                messages.success(request, f'Successfully bought {quantity} shares of {stock.symbol}!')
-            
-        elif trade_type == 'sell':
-            # Check if user has enough shares to sell
-            if current_quantity < quantity:
-                messages.error(request, 'Insufficient shares to sell.')
-                return redirect('stock_detail', symbol=symbol)
-            
-            # Create trade record
-            trade = Trade.objects.create(
-                user=request.user,
-                stock=stock,
-                trade_type='sell',
-                order_type=order_type,
-                quantity=quantity,
-                price=price,
-                total_amount=total_amount,
-                status='executed',
-                execution_date=timezone.now()
-            )
-            
-            # Update user's balance
-            user_profile.account_balance += total_amount
-            user_profile.save()
-            
-            # Update portfolio item
-            if portfolio_item:
-                portfolio_item.quantity -= quantity
-                if portfolio_item.quantity == 0:
-                    portfolio_item.delete()
-                else:
-                    portfolio_item.save()
-            
-            messages.success(request, f'Successfully sold {quantity} shares of {stock.symbol}!')
-        
-        return redirect('stock_detail', symbol=symbol)
-    
-    # Get user's active stop-loss orders for this stock
-    stop_loss_orders = StopLossOrder.objects.filter(
-        user=request.user,
-        stock=stock,
-        status='active'
-    ).order_by('-created_at')
-    
-    context = {
-        'stock': stock,
-        'user_profile': user_profile,
-        'current_quantity': current_quantity,
-        'portfolio_item': portfolio_item,
-        'stop_loss_orders': stop_loss_orders,
-    }
-    return render(request, 'trading/trade.html', context)
-
-@login_required
-def watchlist_view(request):
-    """User's watchlist"""
-    watchlist_items = Watchlist.objects.filter(
-        user=request.user
-    ).select_related('stock').order_by('stock__symbol')
+def watchlist(request):
+    """Watchlist view showing all user's watched stocks"""
+    watchlist_items = Watchlist.objects.filter(user=request.user).select_related('stock')
     
     context = {
         'watchlist_items': watchlist_items,
@@ -518,55 +825,121 @@ def watchlist_view(request):
 def toggle_watchlist(request, symbol):
     """Add or remove stock from watchlist"""
     if request.method == 'POST':
-        stock = get_object_or_404(Stock, symbol=symbol)
+        stock = get_object_or_404(Stock, symbol=symbol.upper())
         watchlist_item, created = Watchlist.objects.get_or_create(
             user=request.user,
             stock=stock
         )
         
         if created:
-            messages.success(request, f'{stock.symbol} added to watchlist.')
+            messages.success(request, f'{stock.symbol} added to your watchlist!')
         else:
             watchlist_item.delete()
-            messages.success(request, f'{stock.symbol} removed from watchlist.')
+            messages.success(request, f'{stock.symbol} removed from your watchlist!')
     
-    return redirect('stock_detail', symbol=symbol)
+    return redirect(request.META.get('HTTP_REFERER', 'watchlist'))
 
 @login_required
 def trade_history(request):
-    """User's trading history"""
-    trades = Trade.objects.filter(
-        user=request.user
-    ).select_related('stock').order_by('-order_date')
+    """Trade history view"""
+    trades = Trade.objects.filter(user=request.user).select_related('stock').order_by('-order_date')
     
+    # Pagination
     paginator = Paginator(trades, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
     context = {
-        'page_obj': page_obj,
         'trades': page_obj,
     }
     return render(request, 'trading/trade_history.html', context)
 
 @login_required
-def stop_loss_orders(request):
-    """View active stop-loss orders"""
-    orders = StopLossOrder.objects.filter(
-        user=request.user,
-        status='active'
-    ).select_related('stock').order_by('-created_at')
+def trade_stock(request, symbol):
+    """Trade stock view - buy/sell interface"""
+    stock = get_object_or_404(Stock, symbol=symbol.upper())
     
-    # Calculate trigger distances for each order
-    for order in orders:
-        if order.stock.current_price:
-            order.trigger_distance = order.stock.current_price - order.stop_price
-            order.trigger_distance_percent = (order.trigger_distance / order.stock.current_price) * 100
-            order.near_trigger = order.stock.current_price <= order.stop_price * 1.05  # Within 5% of trigger
-        else:
-            order.trigger_distance = None
-            order.trigger_distance_percent = None
-            order.near_trigger = False
+    # Get user profile
+    user_profile, created = UserProfile.objects.get_or_create(user=request.user)
+    
+    # Get user's current position
+    try:
+        portfolio_position = Portfolio.objects.get(user=request.user, stock=stock)
+        current_quantity = portfolio_position.quantity
+    except Portfolio.DoesNotExist:
+        portfolio_position = None
+        current_quantity = 0
+    
+    # Get active stop loss orders for this stock
+    stop_loss_orders = StopLossOrder.objects.filter(
+        user=request.user, 
+        stock=stock, 
+        status='active'
+    )
+    
+    if request.method == 'POST':
+        # Process trade order
+        trade_type = request.POST.get('trade_type')
+        quantity = int(request.POST.get('quantity', 0))
+        price = Decimal(request.POST.get('price', '0'))
+        
+        if quantity > 0 and price > 0:
+            # Create trade record
+            trade = Trade.objects.create(
+                user=request.user,
+                stock=stock,
+                trade_type=trade_type,
+                quantity=quantity,
+                price=price,
+                total_amount=quantity * price,
+                order_type='market'
+            )
+            
+            # Update portfolio
+            if trade_type == 'buy':
+                if portfolio_position:
+                    # Update existing position
+                    total_quantity = portfolio_position.quantity + quantity
+                    total_value = (portfolio_position.quantity * portfolio_position.average_price) + (quantity * price)
+                    portfolio_position.average_price = total_value / total_quantity
+                    portfolio_position.quantity = total_quantity
+                    portfolio_position.save()
+                else:
+                    # Create new position
+                    Portfolio.objects.create(
+                        user=request.user,
+                        stock=stock,
+                        quantity=quantity,
+                        average_price=price
+                    )
+            else:  # sell
+                if portfolio_position and portfolio_position.quantity >= quantity:
+                    portfolio_position.quantity -= quantity
+                    if portfolio_position.quantity == 0:
+                        portfolio_position.delete()
+                    else:
+                        portfolio_position.save()
+                else:
+                    messages.error(request, 'Insufficient shares to sell!')
+                    return redirect('trade_stock', symbol=symbol)
+            
+            messages.success(request, f'Trade executed successfully: {trade_type.upper()} {quantity} shares of {stock.symbol}')
+            return redirect('portfolio')
+    
+    context = {
+        'stock': stock,
+        'portfolio_position': portfolio_position,
+        'portfolio_item': portfolio_position,  # For template compatibility
+        'user_profile': user_profile,
+        'current_quantity': current_quantity,
+        'stop_loss_orders': stop_loss_orders,
+    }
+    return render(request, 'trading/trade.html', context)
+
+@login_required
+def stop_loss_orders(request):
+    """Stop loss orders view"""
+    orders = StopLossOrder.objects.filter(user=request.user).select_related('stock').order_by('-created_at')
     
     context = {
         'orders': orders,
@@ -575,223 +948,168 @@ def stop_loss_orders(request):
 
 @login_required
 def cancel_stop_loss(request, order_id):
-    """Cancel a stop-loss order"""
+    """Cancel a stop loss order"""
     if request.method == 'POST':
-        try:
-            order = StopLossOrder.objects.get(id=order_id, user=request.user, status='active')
-            order.status = 'cancelled'
-            order.save()
-            messages.success(request, f'Stop-loss order for {order.stock.symbol} has been cancelled.')
-        except StopLossOrder.DoesNotExist:
-            messages.error(request, 'Stop-loss order not found or already cancelled.')
+        order = get_object_or_404(StopLossOrder, id=order_id, user=request.user)
+        order.is_active = False
+        order.save()
+        messages.success(request, 'Stop loss order cancelled successfully!')
     
     return redirect('stop_loss_orders')
 
-def stock_search_api(request):
-    """API endpoint for stock search autocomplete"""
-    query = request.GET.get('q', '')
-    if len(query) >= 2:
-        stocks = Stock.objects.filter(
-            Q(symbol__icontains=query) | Q(name__icontains=query)
-        )[:10]
-        
-        results = [
-            {
-                'symbol': stock.symbol,
-                'name': stock.name,
-                'current_price': str(stock.current_price) if stock.current_price else None,
-            }
-            for stock in stocks
-        ]
-        return JsonResponse({'results': results})
+@login_required
+def premarket_orders(request):
+    """Pre-market orders view"""
+    from .models import PreMarketStopLoss
     
-    return JsonResponse({'results': []})
+    orders = PreMarketStopLoss.objects.filter(user=request.user).select_related('stock').order_by('-created_at')
+    
+    context = {
+        'orders': orders,
+    }
+    return render(request, 'trading/premarket_orders.html', context)
 
-def get_market_status_for_stock(stock):
-    """Get market status for a specific stock's exchange"""
-    from .models import TradingHours, MarketHoliday
-    from django.utils import timezone
+@login_required
+def premarket_watchlist(request):
+    """Pre-market watchlist"""
+    from .models import PreMarketWatchlist
     
     try:
-        trading_hours = TradingHours.objects.get(exchange=stock.exchange)
-        
-        # Check for holidays first
-        today = timezone.now().date()
-        holiday = MarketHoliday.objects.filter(
-            exchange=stock.exchange,
-            date=today
-        ).first()
-        
-        if holiday:
-            if holiday.is_partial_day:
-                return {
-                    'is_open': False,
-                    'status': 'partial_holiday',
-                    'message': f"Early close today - {holiday.name}",
-                    'early_close_time': holiday.early_close_time,
-                    'trading_hours': trading_hours
-                }
-            else:
-                return {
-                    'is_open': False,
-                    'status': 'holiday',
-                    'message': f"Market closed - {holiday.name}",
-                    'trading_hours': trading_hours
-                }
-        
-        # Get regular market status
-        market_status = trading_hours.get_market_status()
-        return {
-            'is_open': market_status['is_open'],
-            'status': 'open' if market_status['is_open'] else 'closed',
-            'message': market_status['status_message'],
-            'local_time': market_status['local_time'],
-            'trading_hours': trading_hours
-        }
-        
-    except TradingHours.DoesNotExist:
-        return {
-            'is_open': None,
-            'status': 'unknown',
-            'message': f"Trading hours not available for {stock.exchange}",
-            'trading_hours': None
-        }
-
-def get_all_market_status():
-    """Get market status for all exchanges"""
-    from .models import TradingHours
-    
-    market_statuses = {}
-    for trading_hours in TradingHours.objects.all():
-        status = trading_hours.get_market_status()
-        market_statuses[trading_hours.exchange] = {
-            'exchange': trading_hours.exchange,
-            'timezone': trading_hours.timezone,
-            'is_open': status['is_open'],
-            'message': status['status_message'],
-            'local_time': status['local_time'],
-            'market_open': trading_hours.market_open,
-            'market_close': trading_hours.market_close,
-        }
-    
-    return market_statuses
-
-def market_hours_view(request):
-    """Display trading hours for all exchanges"""
-    from .models import TradingHours, MarketHoliday
-    from django.utils import timezone
-    import pytz
-    
-    # Get all trading hours with current status
-    market_statuses = []
-    for trading_hours in TradingHours.objects.all():
-        status = trading_hours.get_market_status()
-        
-        # Check for today's holidays
-        today = timezone.now().date()
-        holiday = MarketHoliday.objects.filter(
-            exchange=trading_hours.exchange,
-            date=today
-        ).first()
-        
-        # Get upcoming holidays
-        upcoming_holidays = MarketHoliday.objects.filter(
-            exchange=trading_hours.exchange,
-            date__gt=today
-        ).order_by('date')[:3]
-        
-        market_statuses.append({
-            'trading_hours': trading_hours,
-            'is_open': status['is_open'],
-            'status_message': status['status_message'],
-            'local_time': status['local_time'],
-            'exchange_timezone': status['exchange_timezone'],
-            'today_holiday': holiday,
-            'upcoming_holidays': upcoming_holidays,
-        })
+        premarket_items = PreMarketWatchlist.objects.filter(user=request.user).select_related('stock')
+    except:
+        # Fallback to regular watchlist if PreMarketWatchlist doesn't exist
+        premarket_items = Watchlist.objects.filter(user=request.user).select_related('stock')
     
     context = {
-        'market_statuses': market_statuses,
-        'current_time': timezone.now(),
+        'premarket_items': premarket_items,
     }
-    return render(request, 'trading/market_hours.html', context)
+    return render(request, 'trading/premarket_watchlist.html', context)
 
-def philippine_trading_times(request):
-    """Display trading hours for all exchanges in Philippine time"""
-    from .models import TradingHours, MarketHoliday
-    from django.utils import timezone
-    import pytz
+@login_required
+def premarket_stop_loss_setup(request, symbol):
+    """Pre-market stop loss setup"""
+    from .models import PreMarketStopLoss
     
-    philippine_tz = pytz.timezone('Asia/Manila')
-    current_time = timezone.now().astimezone(philippine_tz)
+    stock = get_object_or_404(Stock, symbol=symbol.upper())
     
-    # Trading hours conversion to Philippine time
-    trading_schedules = []
-    
-    for trading_hours in TradingHours.objects.all():
-        exchange_tz = pytz.timezone(trading_hours.timezone)
+    if request.method == 'POST':
+        stop_price = Decimal(request.POST.get('stop_price', '0'))
+        quantity = int(request.POST.get('quantity', 0))
         
-        # Create a dummy date for time conversion (today)
-        dummy_date = current_time.date()
-        
-        # Convert market open/close to Philippine time
-        market_open_exchange = exchange_tz.localize(
-            timezone.datetime.combine(dummy_date, trading_hours.market_open)
-        )
-        market_close_exchange = exchange_tz.localize(
-            timezone.datetime.combine(dummy_date, trading_hours.market_close)
-        )
-        
-        market_open_ph = market_open_exchange.astimezone(philippine_tz)
-        market_close_ph = market_close_exchange.astimezone(philippine_tz)
-        
-        # Handle pre-market times if available
-        premarket_open_ph = None
-        if trading_hours.premarket_open:
-            premarket_open_exchange = exchange_tz.localize(
-                timezone.datetime.combine(dummy_date, trading_hours.premarket_open)
+        if stop_price > 0 and quantity > 0:
+            PreMarketStopLoss.objects.create(
+                user=request.user,
+                stock=stock,
+                stop_price=stop_price,
+                quantity=quantity,
+                status='pending'
             )
-            premarket_open_ph = premarket_open_exchange.astimezone(philippine_tz)
-        
-        # Handle after-hours times if available
-        afterhours_close_ph = None
-        if trading_hours.afterhours_close:
-            afterhours_close_exchange = exchange_tz.localize(
-                timezone.datetime.combine(dummy_date, trading_hours.afterhours_close)
-            )
-            afterhours_close_ph = afterhours_close_exchange.astimezone(philippine_tz)
-        
-        # Get current market status
-        status = trading_hours.get_market_status()
-        
-        # Determine trading opportunity for Philippine traders
-        ph_trading_opportunity = "Excellent"  # Default
-        if market_open_ph.hour >= 22 or market_close_ph.hour <= 6:
-            ph_trading_opportunity = "Challenging (Late Night/Early Morning)"
-        elif market_open_ph.hour >= 9 and market_close_ph.hour <= 18:
-            ph_trading_opportunity = "Excellent (Business Hours)"
-        elif market_open_ph.hour >= 6 and market_close_ph.hour <= 22:
-            ph_trading_opportunity = "Good (Manageable Hours)"
-        
-        trading_schedules.append({
-            'exchange': trading_hours.exchange,
-            'exchange_timezone': trading_hours.timezone,
-            'market_open_ph': market_open_ph,
-            'market_close_ph': market_close_ph,
-            'premarket_open_ph': premarket_open_ph,
-            'afterhours_close_ph': afterhours_close_ph,
-            'is_open': status['is_open'],
-            'status_message': status['status_message'],
-            'ph_trading_opportunity': ph_trading_opportunity,
-            'duration_hours': (market_close_ph - market_open_ph).total_seconds() / 3600,
-        })
-    
-    # Sort by market open time in Philippine time
-    trading_schedules.sort(key=lambda x: x['market_open_ph'].hour)
+            messages.success(request, f'Pre-market stop loss order created for {stock.symbol}')
+            return redirect('premarket_orders')
     
     context = {
-        'trading_schedules': trading_schedules,
-        'current_ph_time': current_time,
-        'philippine_timezone': 'Asia/Manila',
+        'stock': stock,
     }
-    return render(request, 'trading/philippine_trading_times.html', context)
+    return render(request, 'trading/premarket_stop_loss_setup.html', context)
+
+@login_required
+def cancel_premarket_order(request, order_id):
+    """Cancel a premarket order"""
+    from .models import PreMarketStopLoss
+    
+    if request.method == 'POST':
+        order = get_object_or_404(PreMarketStopLoss, id=order_id, user=request.user)
+        success = order.cancel_order("User cancelled")
+        
+        if success:
+            messages.success(request, 'Premarket order cancelled successfully!')
+        else:
+            messages.error(request, 'Could not cancel order. It may have already been executed.')
+    
+    return redirect('premarket_orders')
+
+@login_required
+def trading_performance(request):
+    """Trading performance analytics"""
+    try:
+        performance = TradingPerformance.objects.get(user=request.user)
+    except TradingPerformance.DoesNotExist:
+        # Create performance record if it doesn't exist
+        performance = TradingPerformance.objects.create(user=request.user)
+    
+    # Get recent trades for analysis
+    recent_trades = Trade.objects.filter(user=request.user).order_by('-order_date')[:20]
+    
+    context = {
+        'performance': performance,
+        'recent_trades': recent_trades,
+    }
+    return render(request, 'trading/trading_performance.html', context)
+
+@login_required
+def learning_dashboard(request):
+    """Learning dashboard with lessons and progress"""
+    try:
+        lessons = TradingLesson.objects.filter(is_active=True).order_by('order')
+        user_progress = UserLessonProgress.objects.filter(user=request.user)
+        progress_dict = {p.lesson_id: p for p in user_progress}
+        
+        lessons_with_progress = []
+        for lesson in lessons:
+            progress = progress_dict.get(lesson.id)
+            lessons_with_progress.append({
+                'lesson': lesson,
+                'progress': progress,
+                'is_completed': progress.is_completed if progress else False,
+                'completion_percentage': progress.completion_percentage if progress else 0
+            })
+        
+        context = {
+            'lessons_with_progress': lessons_with_progress,
+        }
+    except:
+        context = {'lessons_with_progress': []}
+    
+    return render(request, 'trading/learning_dashboard.html', context)
+
+@login_required
+def lesson_detail(request, lesson_id):
+    """Individual lesson detail view"""
+    try:
+        lesson = get_object_or_404(TradingLesson, id=lesson_id, is_active=True)
+        
+        # Get or create user progress
+        progress, created = UserLessonProgress.objects.get_or_create(
+            user=request.user,
+            lesson=lesson
+        )
+        
+        # Mark lesson as viewed if not completed
+        if not progress.is_completed:
+            progress.completion_percentage = max(progress.completion_percentage, 25)
+            progress.save()
+        
+        # Get previous and next lessons
+        prev_lesson = TradingLesson.objects.filter(
+            order__lt=lesson.order, 
+            is_active=True
+        ).order_by('-order').first()
+        
+        next_lesson = TradingLesson.objects.filter(
+            order__gt=lesson.order, 
+            is_active=True
+        ).order_by('order').first()
+        
+        context = {
+            'lesson': lesson,
+            'progress': progress,
+            'prev_lesson': prev_lesson,
+            'next_lesson': next_lesson,
+        }
+    except:
+        messages.error(request, 'Lesson not found.')
+        return redirect('learning_dashboard')
+    
+    return render(request, 'trading/lesson_detail.html', context)
+
+# ...existing code...

@@ -1,0 +1,180 @@
+{% extends 'trading/base.html' %}
+
+{% block title %}Pre-Market Watchlist - Trading Platform{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-eye me-2"></i>Pre-Market Watchlist</h1>
+            <div class="btn-group">
+                <a href="{% url 'stock_list' %}" class="btn btn-success">
+                    <i class="fas fa-plus me-2"></i>Add Stocks
+                </a>
+                <a href="{% url 'premarket_orders' %}" class="btn btn-info">
+                    <i class="fas fa-list me-2"></i>Pre-Market Orders
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Market Status Alert -->
+<div class="alert alert-info mb-4">
+    <div class="row align-items-center">
+        <div class="col-md-8">
+            <h5 class="alert-heading mb-1"><i class="fas fa-clock me-2"></i>Pre-Market Trading</h5>
+            <p class="mb-0">Monitor your watchlist stocks before regular market hours. Set up stop-loss orders for market open.</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <span class="badge bg-warning fs-6">Pre-Market Session</span>
+        </div>
+    </div>
+</div>
+
+<!-- Watchlist Table -->
+<div class="card">
+    <div class="card-header">
+        <h5><i class="fas fa-list me-2"></i>Pre-Market Stocks</h5>
+    </div>
+    <div class="card-body">
+        {% if premarket_items %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Stock</th>
+                        <th>Company</th>
+                        <th class="text-end">Last Close</th>
+                        <th class="text-end">Pre-Market Price</th>
+                        <th class="text-end">Change</th>
+                        <th class="text-end">% Change</th>
+                        <th class="text-end">Volume</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in premarket_items %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'stock_detail' item.stock.symbol %}" class="text-decoration-none fw-bold">
+                                {{ item.stock.symbol }}
+                            </a>
+                        </td>
+                        <td>{{ item.stock.name|truncatechars:30 }}</td>
+                        <td class="text-end">
+                            {% if item.stock.current_price %}
+                                ${{ item.stock.current_price|floatformat:2 }}
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if item.stock.current_price %}
+                                <strong>${{ item.stock.current_price|floatformat:2 }}</strong>
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <!-- Calculate change - for now showing placeholder -->
+                            <span class="text-success">+$0.00</span>
+                        </td>
+                        <td class="text-end">
+                            <span class="badge bg-success">+0.00%</span>
+                        </td>
+                        <td class="text-end">
+                            <small class="text-muted">N/A</small>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'stock_detail' item.stock.symbol %}" class="btn btn-outline-primary btn-sm" title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{% url 'premarket_stop_loss_setup' item.stock.symbol %}" class="btn btn-warning btn-sm" title="Set Stop Loss">
+                                    <i class="fas fa-shield-alt"></i>
+                                </a>
+                                <form method="post" action="{% url 'toggle_watchlist' item.stock.symbol %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-outline-danger btn-sm" title="Remove from Watchlist">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-eye-slash fa-4x text-muted mb-4"></i>
+            <h4>No Stocks in Pre-Market Watchlist</h4>
+            <p class="text-muted mb-4">Add stocks to your watchlist to monitor them during pre-market hours.</p>
+            <a href="{% url 'stock_list' %}" class="btn btn-primary btn-lg">
+                <i class="fas fa-search me-2"></i>Browse Stocks
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Pre-Market Tips -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card border-info">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Pre-Market Tips</h6>
+            </div>
+            <div class="card-body">
+                <ul class="mb-0">
+                    <li>Pre-market trading has lower volume and higher volatility</li>
+                    <li>Set stop-loss orders to manage risk</li>
+                    <li>Monitor earnings announcements and news</li>
+                    <li>Price gaps are common at market open</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Risk Warnings</h6>
+            </div>
+            <div class="card-body">
+                <ul class="mb-0">
+                    <li>Limited liquidity can cause wider spreads</li>
+                    <li>Price movements may not reflect regular hours</li>
+                    <li>Always use limit orders in pre-market</li>
+                    <li>Consider position sizing carefully</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Auto-refresh prices every 30 seconds during pre-market
+    setInterval(function() {
+        // Only refresh if it's pre-market hours (4:00 AM - 9:30 AM EST)
+        var now = new Date();
+        var hours = now.getHours();
+        if (hours >= 4 && hours < 9.5) {
+            location.reload();
+        }
+    }, 30000);
+    
+    // Add confirmation for removing stocks from watchlist
+    $('form button[title="Remove from Watchlist"]').on('click', function(e) {
+        if (!confirm('Remove this stock from your watchlist?')) {
+            e.preventDefault();
+        }
+    });
+});
+</script>
+{% endblock %}
